@@ -1,0 +1,16 @@
+# Git worktrees created by yolo -w
+.conductor/
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.bak

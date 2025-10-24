@@ -1,0 +1,152 @@
+#!/bin/bash
+
+# YOLO - Run AI coding agents with appropriate bypass flags
+# Portable replacement for the Elvish yolo function
+# Supports automatic worktree creation and per-agent flag mapping
+
+set -e
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Function to print colored output
+print_color() {
+    local color=$1
+    shift
+    printf "${color}%s${NC}\n" "$*" >&2
+}
+
+# Function to show usage
+show_usage() {
+    cat >&2 <<EOF
+YOLO - Run AI coding agents with appropriate bypass flags
+
+Usage: yolo [OPTIONS] COMMAND [ARGS...]
+
+Options:
+  -w, --worktree    Create a git worktree before running the command
+  -h, --help        Show this help message
+
+Supported Commands:
+  codex             Anthropic Code (adds --dangerously-bypass-approvals-and-sandbox)
+  claude            Claude Code (adds --dangerously-skip-permissions)
+  copilot           GitHub Copilot (adds --allow-all-tools --allow-all-paths)
+  droid             Factory AI Droid (adds --skip-permissions-unsafe)
+  amp               Sourcegraph Amp (adds --dangerously-allow-all)
+  cursor-agent      Cursor Agent (adds --force)
+  <other>           Any other command (adds --yolo)
+
+Examples:
+  yolo claude "Fix the bug in src/main.js"
+  yolo -w droid "Refactor the authentication module"
+  yolo codex --help
+
+EOF
+}
+
+# Parse options
+use_worktree=false
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -w|--worktree)
+            use_worktree=true
+            shift
+            ;;
+        -h|--help)
+            show_usage
+            exit 0
+            ;;
+        -*)
+            print_color "$RED" "Unknown option: $1"
+            show_usage
+            exit 1
+            ;;
+        *)
+            # First non-option argument is the command
+            break
+            ;;
+    esac
+done
+
+# Check if command is provided
+if [ $# -eq 0 ]; then
+    print_color "$RED" "Error: missing command argument"
+    show_usage
+    exit 1
+fi
+
+cmd="$1"
+shift
+rest_args=("$@")
+
+# If worktree mode is enabled, set up the worktree
+if [ "$use_worktree" = true ]; then
+    # Check if we're in a git repository
+    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+        print_color "$RED" "Error: not in a git repository, cannot create worktree"
+        exit 1
+    fi
+
+    # Create .conductor directory if it doesn't exist
+    conductor_dir=".conductor"
+    if [ ! -d "$conductor_dir" ]; then
+        mkdir -p "$conductor_dir"
+    fi
+
+    # Generate branch name based on agent and timestamp
+    timestamp=$(date +%Y%m%d-%H%M%S)
+    branch_name="yolo/$cmd/$timestamp"
+    worktree_path="$conductor_dir/$cmd-$timestamp"
+
+    print_color "$BLUE" "Creating worktree at $worktree_path with branch $branch_name"
+
+    # Create the worktree
+    if ! git worktree add -b "$branch_name" "$worktree_path" 2>&1; then
+        print_color "$RED" "Error: failed to create worktree"
+        exit 1
+    fi
+
+    print_color "$BLUE" "Switching to worktree..."
+    cd "$worktree_path" || exit 1
+fi
+
+# Map commands to their appropriate bypass flags
+case "$cmd" in
+    codex)
+        print_color "$GREEN" "Running codex with --dangerously-bypass-approvals-and-sandbox"
+        exec codex --dangerously-bypass-approvals-and-sandbox "${rest_args[@]}"
+        ;;
+    claude)
+        print_color "$GREEN" "Running claude with --dangerously-skip-permissions"
+        exec claude --dangerously-skip-permissions "${rest_args[@]}"
+        ;;
+    copilot)
+        print_color "$GREEN" "Running copilot with --allow-all-tools --allow-all-paths"
+        exec copilot --allow-all-tools --allow-all-paths "${rest_args[@]}"
+        ;;
+    droid)
+        print_color "$GREEN" "Running droid with --skip-permissions-unsafe"
+        exec droid --skip-permissions-unsafe "${rest_args[@]}"
+        ;;
+    amp)
+        print_color "$GREEN" "Running amp with --dangerously-allow-all"
+        exec amp --dangerously-allow-all "${rest_args[@]}"
+        ;;
+    cursor-agent)
+        print_color "$GREEN" "Running cursor-agent with --force"
+        exec cursor-agent --force "${rest_args[@]}"
+        ;;
+    *)
+        # For all others, check if command exists and add --yolo
+        if ! command -v "$cmd" >/dev/null 2>&1; then
+            print_color "$RED" "Error: command '$cmd' not found"
+            exit 1
+        fi
+        print_color "$GREEN" "Running $cmd with --yolo"
+        exec "$cmd" --yolo "${rest_args[@]}"
+        ;;
+esac
