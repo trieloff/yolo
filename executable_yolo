@@ -29,6 +29,7 @@ Agents:
   droid               - Runs with --skip-permissions-unsafe
   amp                 - Runs with --dangerously-allow-all
   cursor-agent        - Runs with --force
+  opencode            - Runs with no extra flags
   *                   - Any other agent runs with --yolo
 
 Examples:
@@ -38,6 +39,7 @@ Examples:
 
 Environment Variables:
   YOLO_FLAGS_<agent>  - Override flags for a specific agent (e.g., YOLO_FLAGS_claude)
+  YOLO_DEBUG          - Set to 'true' to print command before execution
 
 Worktree Mode:
   When -w/--worktree is used, a new git worktree is created at:
@@ -110,6 +112,10 @@ agent_flags() {
             ;;
         cursor-agent)
             echo "--force"
+            ;;
+        opencode)
+            # No extra flags for opencode
+            echo ""
             ;;
         *)
             # Default to --yolo for unknown agents
@@ -217,6 +223,17 @@ main() {
     if [ "$use_worktree" -eq 1 ]; then
         run_dir="$(create_worktree "$agent")"
         info "Switching to worktree: $run_dir" >&2
+    fi
+    
+    # Debug mode - show what will be executed
+    if [ "${YOLO_DEBUG:-false}" = "true" ]; then
+        if [ "$use_worktree" -eq 1 ]; then
+            info "[debug] Branch: ${YOLO_BRANCH:-}"
+            info "[debug] Worktree: $run_dir"
+        fi
+        info "[debug] Will execute in $run_dir:"
+        # shellcheck disable=SC2145
+        info "  $agent $flags $@"
     fi
     
     # Dry run mode - just print what would be executed

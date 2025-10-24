@@ -65,6 +65,7 @@ Each agent gets its appropriate bypass flags automatically:
 | `droid` | `--skip-permissions-unsafe` |
 | `amp` | `--dangerously-allow-all` |
 | `cursor-agent` | `--force` |
+| `opencode` | *(no extra flags)* |
 | *other* | `--yolo` |
 
 ### Worktree Mode
@@ -154,6 +155,17 @@ yolo cursor-agent "run task"
 # Runs: cursor-agent --super-force run task
 ```
 
+### Debug Mode
+
+```bash
+# See what command will be executed (but still run it)
+YOLO_DEBUG=true yolo claude "test"
+# Output:
+# yolo: [debug] Will execute in .:
+#   claude --dangerously-skip-permissions test
+# (then executes the command)
+```
+
 ## 🔧 Configuration
 
 ### Environment Variables
@@ -161,6 +173,7 @@ yolo cursor-agent "run task"
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `YOLO_FLAGS_<agent>` | Override flags for specific agent | `YOLO_FLAGS_claude="--custom"` |
+| `YOLO_DEBUG` | Print command before execution | `YOLO_DEBUG=true` |
 
 Note: Replace hyphens with underscores in agent names (e.g., `cursor-agent` → `YOLO_FLAGS_cursor_agent`).
 
