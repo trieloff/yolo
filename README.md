@@ -81,7 +81,16 @@ yolo <command> [arguments...]
 yolo -w <command> [arguments...]
 ```
 
-This creates a git worktree in `.conductor/<command>-<timestamp>` and runs the agent there.
+This creates a git worktree in `.conductor/<command>-<timestamp>` at the repository root and runs the agent there.
+
+### Dry Run Mode
+
+```bash
+yolo --dry-run <command> [arguments...]
+yolo -n <command> [arguments...]
+```
+
+See what would be executed without actually running the command.
 
 ### Examples
 
@@ -94,6 +103,15 @@ yolo -w droid "Refactor the entire authentication module"
 
 # Run Cursor Agent with worktree
 yolo -w cursor-agent "Add comprehensive tests"
+
+# Dry run to see what would be executed
+yolo --dry-run codex "Add tests"
+
+# Use custom flags via environment variable
+YOLO_FLAGS_claude="--other-flag" yolo claude "test"
+
+# Enable debug output
+YOLO_DEBUG=true yolo -w droid "refactor code"
 
 # Run any other agent (adds --yolo flag)
 yolo my-custom-agent "do something"
@@ -118,9 +136,11 @@ The `-w` or `--worktree` flag is a game-changer for AI-assisted development:
 ### What It Does
 
 1. Creates a new git branch: `yolo/<agent>/<timestamp>`
-2. Creates a worktree in `.conductor/<agent>-<timestamp>`
+2. Creates a worktree in `.conductor/<agent>-<timestamp>` at the repository root
 3. Changes to that worktree
 4. Runs your AI agent there
+
+**Note:** Worktrees are always created at the repository root (using `git rev-parse --show-toplevel`), even if you run yolo from a subdirectory. This prevents nested `.conductor` directories and keeps your repository organized.
 
 ### Why It's Awesome
 
@@ -158,12 +178,22 @@ No configuration needed! YOLO works out of the box.
 
 ### Environment Variables
 
-You can override behavior with environment variables:
+You can customize behavior with environment variables:
 
 ```bash
-# Example: If an agent has a different command name
-YOLO_CLAUDE_CMD=claude-beta yolo claude "test"
+# Enable debug output
+YOLO_DEBUG=true yolo claude "test"
+
+# Override flags for a specific agent
+YOLO_FLAGS_claude="--custom-flag --another-flag" yolo claude "test"
+
+# Override flags for agents with hyphens (use underscores)
+YOLO_FLAGS_cursor_agent="--custom-flag" yolo cursor-agent "test"
 ```
+
+Available environment variables:
+- `YOLO_DEBUG` - Enable debug output (true/false)
+- `YOLO_FLAGS_<agent>` - Override default flags for a specific agent
 
 ## 🔒 Safety
 
