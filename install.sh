@@ -61,7 +61,7 @@ is_in_path() {
     local dir=$1
     print_verbose "Checking if '$dir' is in PATH..."
     print_verbose "Current PATH: $PATH"
-    if [[ ":$PATH:" =~ ":${dir}:" ]]; then
+    if [[ ":$PATH:" =~ :${dir}: ]]; then
         print_verbose "Directory '$dir' is in PATH"
         return 0
     else

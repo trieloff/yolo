@@ -49,18 +49,21 @@ if [ "$output" != "0.1.0" ]; then
     exit 1
 fi
 
+output=""
 output=$(./executable_yolo --dry-run codex test)
 if [ "$output" != "codex --dangerously-bypass-approvals-and-sandbox test" ]; then
     echo "Test failed for --dry-run codex"
     exit 1
 fi
 
+output=""
 output=$(./executable_yolo codex test)
 if [ "$output" != "codex --dangerously-bypass-approvals-and-sandbox test" ]; then
     echo "Test failed for codex"
     exit 1
 fi
 
+output=""
 output=$(./executable_yolo claude test)
 if [ "$output" != "claude --dangerously-skip-permissions test" ]; then
     echo "Test failed for claude"
@@ -68,6 +71,7 @@ if [ "$output" != "claude --dangerously-skip-permissions test" ]; then
 fi
 
 export YOLO_FLAGS_claude="--custom-flag"
+output=""
 output=$(./executable_yolo claude test)
 if [ "$output" != "claude --custom-flag test" ]; then
     echo "Test failed for YOLO_FLAGS_claude"
@@ -76,6 +80,7 @@ fi
 unset YOLO_FLAGS_claude
 
 export YOLO_FLAGS_cursor_agent="--custom-flag"
+output=""
 output=$(./executable_yolo cursor-agent test)
 if [ "$output" != "cursor-agent --custom-flag test" ]; then
     echo "Test failed for YOLO_FLAGS_cursor_agent"
@@ -83,36 +88,42 @@ if [ "$output" != "cursor-agent --custom-flag test" ]; then
 fi
 unset YOLO_FLAGS_cursor_agent
 
+output=""
 output=$(./executable_yolo copilot test)
 if [ "$output" != "copilot --allow-all-tools --allow-all-paths test" ]; then
     echo "Test failed for copilot"
     exit 1
 fi
 
+output=""
 output=$(./executable_yolo droid test)
 if [ "$output" != "droid --skip-permissions-unsafe test" ]; then
     echo "Test failed for droid"
     exit 1
 fi
 
+output=""
 output=$(./executable_yolo amp test)
 if [ "$output" != "amp --dangerously-allow-all test" ]; then
     echo "Test failed for amp"
     exit 1
 fi
 
+output=""
 output=$(./executable_yolo cursor-agent test)
 if [ "$output" != "cursor-agent --force test" ]; then
     echo "Test failed for cursor-agent"
     exit 1
 fi
 
+output=""
 output=$(./executable_yolo opencode test)
 if [ "$output" != "opencode test" ]; then
     echo "Test failed for opencode"
     exit 1
 fi
 
+output=""
 output=$(./executable_yolo other test)
 if [ "$output" != "other --yolo test" ]; then
     echo "Test failed for other"
@@ -123,6 +134,7 @@ fi
 if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
     git init
 fi
+output=""
 output=$(./executable_yolo -w other test)
 for d in .conductor/other-*; do
     if [ ! -d "$d" ]; then
@@ -137,6 +149,7 @@ if [ "$output" != "other --yolo test" ]; then
 fi
 
 # Test command not found
+output=""
 output=$(./executable_yolo notfound 2>&1)
 if [[ "$output" != *"Warning: command not found: notfound"* ]]; then
     echo "Test failed for command not found"
@@ -144,6 +157,7 @@ if [[ "$output" != *"Warning: command not found: notfound"* ]]; then
 fi
 
 # Test YOLO_DEBUG
+output=""
 output=$(YOLO_DEBUG=true ./executable_yolo other test 2>&1)
 if [[ "$output" != *"Executing: other --yolo test"* ]]; then
     echo "Test failed for YOLO_DEBUG"
