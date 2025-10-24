@@ -155,16 +155,21 @@ git branch -D yolo/droid/20251024-184528
 
 ## ⚙️ Configuration
 
-No configuration needed! YOLO works out of the box.
-
 ### Environment Variables
 
-You can override behavior with environment variables:
+You can override flags for specific agents using environment variables:
 
 ```bash
-# Example: If an agent has a different command name
-YOLO_CLAUDE_CMD=claude-beta yolo claude "test"
+# Override flags for Claude
+export YOLO_FLAGS_claude="--custom-flag --another-flag"
+yolo claude "test"
+
+# Override flags for any agent
+export YOLO_FLAGS_droid="--my-custom-flags"
+yolo droid "refactor code"
 ```
+
+The pattern is `YOLO_FLAGS_<agent>` where `<agent>` is the command name.
 
 ## 🔒 Safety
 

@@ -54,6 +54,11 @@ if [ ! -x "$YOLO_CMD" ]; then
     YOLO_CMD="yolo"
 fi
 
+# Resolve to absolute path if it's a local file
+if [[ "$YOLO_CMD" == "./"* ]]; then
+    YOLO_CMD="$(cd "$(dirname "$YOLO_CMD")" && pwd)/$(basename "$YOLO_CMD")"
+fi
+
 echo "Testing YOLO command... (using $YOLO_CMD)"
 echo
 
@@ -106,12 +111,11 @@ run_test "Command mappings documented in help" test_command_mapping
 
 # Test 6: Worktree flag parsing (without actually creating worktree)
 test_worktree_flag() {
-    local original_dir="$PWD"
     # Test with non-git directory - should fail gracefully
     cd /tmp
     # Strip ANSI color codes for reliable grepping
-    output=$("$original_dir/$YOLO_CMD" -w mock-agent test 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
-    cd "$original_dir"
+    output=$("$YOLO_CMD" -w mock-agent test 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
+    cd "$OLDPWD"
     echo "$output" | grep -q "not in a git repository"
     return $?
 }
@@ -119,7 +123,6 @@ run_test "Worktree flag requires git repository" test_worktree_flag
 
 # Test 7: Test in actual git repo
 test_git_repo_check() {
-    local original_dir="$PWD"
     # Create a temporary git repo
     temp_repo=$(mktemp -d)
     cd "$temp_repo"
@@ -132,15 +135,14 @@ test_git_repo_check() {
     
     # Test worktree creation
     export PATH="/tmp/yolo-test:$PATH"
-    "$original_dir/$YOLO_CMD" -w mock-agent "test" 2>&1 | grep -q "Creating worktree"
-    local result=$?
+    "$YOLO_CMD" -w mock-agent "test" 2>&1 | grep -q "Creating worktree"
+    result=$?
     
     # Cleanup
     cd /tmp
     rm -rf "$temp_repo"
-    cd "$original_dir"
     
-    return "$result"
+    return $result
 }
 run_test "Worktree creation in git repo" test_git_repo_check
 

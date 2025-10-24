@@ -4,7 +4,7 @@
 # Portable replacement for the Elvish yolo function
 # Supports automatic worktree creation and per-agent flag mapping
 
-set -e
+set -e -u -o pipefail
 
 # Colors for output
 RED='\033[0;31m'
@@ -29,6 +29,7 @@ Usage: yolo [OPTIONS] COMMAND [ARGS...]
 Options:
   -w, --worktree    Create a git worktree before running the command
   -h, --help        Show this help message
+  --version         Show version information
 
 Supported Commands:
   codex             Anthropic Code (adds --dangerously-bypass-approvals-and-sandbox)
@@ -45,7 +46,15 @@ Examples:
   yolo -w droid "Refactor the authentication module"
   yolo codex --help
 
+Environment Variables:
+  YOLO_FLAGS_<agent>  Override flags for a specific agent (e.g., YOLO_FLAGS_claude)
+
 EOF
+}
+
+# Function to show version
+show_version() {
+    echo "yolo version 1.0.0"
 }
 
 # Parse options
@@ -58,6 +67,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -h|--help)
             show_usage
+            exit 0
+            ;;
+        --version)
+            show_version
             exit 0
             ;;
         -*)
@@ -91,8 +104,10 @@ if [ "$use_worktree" = true ]; then
         exit 1
     fi
 
-    # Create .conductor directory if it doesn't exist
-    conductor_dir=".conductor"
+    # Get repository root to ensure .conductor is always at the top level
+    repo_root=$(git rev-parse --show-toplevel)
+    conductor_dir="$repo_root/.conductor"
+    
     if [ ! -d "$conductor_dir" ]; then
         mkdir -p "$conductor_dir"
     fi
@@ -115,30 +130,44 @@ if [ "$use_worktree" = true ]; then
 fi
 
 # Map commands to their appropriate bypass flags
+# Check for environment variable override first
+env_var="YOLO_FLAGS_$cmd"
+if [ -n "${!env_var:-}" ]; then
+    print_color "$GREEN" "Running $cmd with custom flags: ${!env_var}"
+    # shellcheck disable=SC2086
+    exec "$cmd" ${!env_var} "${rest_args[@]}"
+fi
+
 case "$cmd" in
     codex)
-        print_color "$GREEN" "Running codex with --dangerously-bypass-approvals-and-sandbox"
-        exec codex --dangerously-bypass-approvals-and-sandbox "${rest_args[@]}"
+        flags=(--dangerously-bypass-approvals-and-sandbox)
+        print_color "$GREEN" "Running codex with ${flags[*]}"
+        exec codex "${flags[@]}" "${rest_args[@]}"
         ;;
     claude)
-        print_color "$GREEN" "Running claude with --dangerously-skip-permissions"
-        exec claude --dangerously-skip-permissions "${rest_args[@]}"
+        flags=(--dangerously-skip-permissions)
+        print_color "$GREEN" "Running claude with ${flags[*]}"
+        exec claude "${flags[@]}" "${rest_args[@]}"
         ;;
     copilot)
-        print_color "$GREEN" "Running copilot with --allow-all-tools --allow-all-paths"
-        exec copilot --allow-all-tools --allow-all-paths "${rest_args[@]}"
+        flags=(--allow-all-tools --allow-all-paths)
+        print_color "$GREEN" "Running copilot with ${flags[*]}"
+        exec copilot "${flags[@]}" "${rest_args[@]}"
         ;;
     droid)
-        print_color "$GREEN" "Running droid with --skip-permissions-unsafe"
-        exec droid --skip-permissions-unsafe "${rest_args[@]}"
+        flags=(--skip-permissions-unsafe)
+        print_color "$GREEN" "Running droid with ${flags[*]}"
+        exec droid "${flags[@]}" "${rest_args[@]}"
         ;;
     amp)
-        print_color "$GREEN" "Running amp with --dangerously-allow-all"
-        exec amp --dangerously-allow-all "${rest_args[@]}"
+        flags=(--dangerously-allow-all)
+        print_color "$GREEN" "Running amp with ${flags[*]}"
+        exec amp "${flags[@]}" "${rest_args[@]}"
         ;;
     cursor-agent)
-        print_color "$GREEN" "Running cursor-agent with --force"
-        exec cursor-agent --force "${rest_args[@]}"
+        flags=(--force)
+        print_color "$GREEN" "Running cursor-agent with ${flags[*]}"
+        exec cursor-agent "${flags[@]}" "${rest_args[@]}"
         ;;
     opencode)
         print_color "$GREEN" "Running opencode (no additional flags needed)"
@@ -150,7 +179,8 @@ case "$cmd" in
             print_color "$RED" "Error: command '$cmd' not found"
             exit 1
         fi
-        print_color "$GREEN" "Running $cmd with --yolo"
-        exec "$cmd" --yolo "${rest_args[@]}"
+        flags=(--yolo)
+        print_color "$GREEN" "Running $cmd with ${flags[*]}"
+        exec "$cmd" "${flags[@]}" "${rest_args[@]}"
         ;;
 esac
