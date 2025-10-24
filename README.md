@@ -162,8 +162,8 @@ No configuration needed! YOLO works out of the box.
 You can override behavior with environment variables:
 
 ```bash
-# Example: If an agent has a different command name
-YOLO_CLAUDE_CMD=claude-beta yolo claude "test"
+# Example: Override Claude's default flags
+YOLO_FLAGS_CLAUDE="--custom-flag --another-flag" yolo claude "test"
 ```
 
 ## 🔒 Safety

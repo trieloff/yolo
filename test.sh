@@ -95,17 +95,17 @@ run_test "Unknown command gets --yolo flag" test_unknown_command
 # Test 5: Verify known command mappings (just check the logic, don't execute)
 test_command_mapping() {
     # Test that help shows all supported commands
-    yolo --help 2>&1 | grep -q "codex" && \
-    yolo --help 2>&1 | grep -q "claude" && \
-    yolo --help 2>&1 | grep -q "droid" && \
-    yolo --help 2>&1 | grep -q "amp" && \
-    yolo --help 2>&1 | grep -q "copilot"
+    $YOLO_CMD --help 2>&1 | grep -q "codex" && \
+    $YOLO_CMD --help 2>&1 | grep -q "claude" && \
+    $YOLO_CMD --help 2>&1 | grep -q "droid" && \
+    $YOLO_CMD --help 2>&1 | grep -q "amp" && \
+    $YOLO_CMD --help 2>&1 | grep -q "copilot"
 }
 run_test "Command mappings documented in help" test_command_mapping
 
 # Test 6: Verify opencode command is documented
 test_opencode_mapping() {
-    $YOLO_CMD --help 2>    yolo --help 2>&1 | grep -q "opencode"1 | grep -q "opencode"
+    $YOLO_CMD --help 2>&1 | grep -q "opencode"
 }
 run_test "OpenCode command documented in help" test_opencode_mapping
 
@@ -114,13 +114,13 @@ test_worktree_flag() {
     # Test with non-git directory - should fail gracefully
     cd /tmp
     # Strip ANSI color codes for reliable grepping
-    output=$(yolo -w mock-agent test 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
+    output=$($YOLO_CMD -w mock-agent test 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
     echo "$output" | grep -q "not in a git repository"
     return $?
 }
 run_test "Worktree flag requires git repository" test_worktree_flag
 
-# Test 7: Test in actual git repo
+# Test 8: Test in actual git repo
 test_git_repo_check() {
     # Create a temporary git repo
     temp_repo=$(mktemp -d)
@@ -131,16 +131,16 @@ test_git_repo_check() {
     echo "test" > test.txt
     git add test.txt
     git commit -m "Initial commit" >/dev/null 2>&1
-    
+
     # Test worktree creation
     export PATH="/tmp/yolo-test:$PATH"
-    yolo -w mock-agent "test" 2>&1 | grep -q "Creating worktree"
+    $YOLO_CMD -w mock-agent "test" 2>&1 | grep -q "Creating worktree"
     local result=$?
-    
+
     # Cleanup
     cd /tmp
     rm -rf "$temp_repo"
-    
+
     return $result
 }
 run_test "Worktree creation in git repo" test_git_repo_check
@@ -149,11 +149,11 @@ run_test "Worktree creation in git repo" test_git_repo_check
 rm -rf /tmp/yolo-test
 
 echo
-echo "================================"
+echo "================================="
 echo "Tests run: $TESTS_RUN"
 echo "Tests passed: $TESTS_PASSED"
 echo "Tests failed: $((TESTS_RUN - TESTS_PASSED))"
-echo "================================"
+echo "================================="
 
 if [ $TESTS_PASSED -eq $TESTS_RUN ]; then
     print_pass "All tests passed!"

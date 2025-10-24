@@ -4,7 +4,7 @@
 # Portable replacement for the Elvish yolo function
 # Supports automatic worktree creation and per-agent flag mapping
 
-set -e
+set -euo pipefail
 
 # Colors for output
 RED='\033[0;31m'
@@ -20,6 +20,48 @@ print_color() {
     printf "${color}%s${NC}\n" "$*" >&2
 }
 
+# Function to get flags for a command (with environment override support)
+get_flags_for_command() {
+    local cmd="$1"
+    local env_var="YOLO_FLAGS_$(echo "$cmd" | tr '[:lower:]' '[:upper:]')"  # Convert to uppercase for env var name
+    local default_flags=""
+
+    # Set default flags based on command
+    case "$cmd" in
+        codex)
+            default_flags="--dangerously-bypass-approvals-and-sandbox"
+            ;;
+        claude)
+            default_flags="--dangerously-skip-permissions"
+            ;;
+        copilot)
+            default_flags="--allow-all-tools --allow-all-paths"
+            ;;
+        droid)
+            default_flags="--skip-permissions-unsafe"
+            ;;
+        amp)
+            default_flags="--dangerously-allow-all"
+            ;;
+        cursor-agent)
+            default_flags="--force"
+            ;;
+        opencode)
+            default_flags=""
+            ;;
+        *)
+            default_flags="--yolo"
+            ;;
+    esac
+
+    # Check for environment override
+    if [ -n "${!env_var:-}" ]; then
+        echo "${!env_var}"
+    else
+        echo "$default_flags"
+    fi
+}
+
 # Function to show usage
 show_usage() {
     cat >&2 <<EOF
@@ -30,6 +72,8 @@ Usage: yolo [OPTIONS] COMMAND [ARGS...]
 Options:
   -w, --worktree    Create a git worktree before running the command
   -h, --help        Show this help message
+  -v, --version     Show version information
+  --dry-run         Show what would be executed without running it
 
 Supported Commands:
   codex             Anthropic Code (adds --dangerously-bypass-approvals-and-sandbox)
@@ -51,6 +95,7 @@ EOF
 
 # Parse options
 use_worktree=false
+dry_run=false
 while [[ $# -gt 0 ]]; do
     case $1 in
         -w|--worktree)
@@ -60,6 +105,14 @@ while [[ $# -gt 0 ]]; do
         -h|--help)
             show_usage
             exit 0
+            ;;
+        -v|--version)
+            echo "YOLO version 1.0.0"
+            exit 0
+            ;;
+        --dry-run)
+            dry_run=true
+            shift
             ;;
         -*)
             print_color "$RED" "Unknown option: $1"
@@ -92,8 +145,9 @@ if [ "$use_worktree" = true ]; then
         exit 1
     fi
 
-    # Create .conductor directory if it doesn't exist
-    conductor_dir=".conductor"
+    # Create .conductor directory in repo root if it doesn't exist
+    repo_root=$(git rev-parse --show-toplevel)
+    conductor_dir="$repo_root/.conductor"
     if [ ! -d "$conductor_dir" ]; then
         mkdir -p "$conductor_dir"
     fi
@@ -115,43 +169,28 @@ if [ "$use_worktree" = true ]; then
     cd "$worktree_path" || exit 1
 fi
 
+# Handle dry-run mode
+if [ "$dry_run" = true ]; then
+    flags=$(get_flags_for_command "$cmd")
+    print_color "$BLUE" "DRY RUN: Would execute in $(pwd):"
+    if [ -n "$flags" ]; then
+        print_color "$YELLOW" "$cmd $flags ${rest_args[*]}"
+    else
+        print_color "$YELLOW" "$cmd ${rest_args[*]}"
+    fi
+    exit 0
+fi
+
 # Map commands to their appropriate bypass flags
-case "$cmd" in
-    codex)
-        print_color "$GREEN" "Running codex with --dangerously-bypass-approvals-and-sandbox"
-        exec codex --dangerously-bypass-approvals-and-sandbox "${rest_args[@]}"
-        ;;
-    claude)
-        print_color "$GREEN" "Running claude with --dangerously-skip-permissions"
-        exec claude --dangerously-skip-permissions "${rest_args[@]}"
-        ;;
-    copilot)
-        print_color "$GREEN" "Running copilot with --allow-all-tools --allow-all-paths"
-        exec copilot --allow-all-tools --allow-all-paths "${rest_args[@]}"
-        ;;
-    droid)
-        print_color "$GREEN" "Running droid with --skip-permissions-unsafe"
-        exec droid --skip-permissions-unsafe "${rest_args[@]}"
-        ;;
-    amp)
-        print_color "$GREEN" "Running amp with --dangerously-allow-all"
-        exec amp --dangerously-allow-all "${rest_args[@]}"
-        ;;
-    cursor-agent)
-        print_color "$GREEN" "Running cursor-agent with --force"
-        exec cursor-agent --force "${rest_args[@]}"
-        ;;
-    opencode)
-        print_color "$GREEN" "Running opencode (no additional flags needed)"
-        exec opencode "${rest_args[@]}"
-        ;;
-    *)
-        # For all others, check if command exists and add --yolo
-        if ! command -v "$cmd" >/dev/null 2>&1; then
-            print_color "$RED" "Error: command '$cmd' not found"
-            exit 1
-        fi
-        print_color "$GREEN" "Running $cmd with --yolo"
-        exec "$cmd" --yolo "${rest_args[@]}"
-        ;;
-esac
+flags=$(get_flags_for_command "$cmd")
+if [ -n "$flags" ]; then
+    print_color "$GREEN" "Running $cmd with $flags"
+    exec "$cmd" $flags "${rest_args[@]}"
+else
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        print_color "$RED" "Error: command '$cmd' not found"
+        exit 1
+    fi
+    print_color "$GREEN" "Running $cmd"
+    exec "$cmd" "${rest_args[@]}"
+fi
