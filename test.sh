@@ -8,7 +8,6 @@ set -e
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
@@ -141,7 +140,7 @@ test_git_repo_check() {
     rm -rf "$temp_repo"
     cd "$original_dir"
     
-    return $result
+    return "$result"
 }
 run_test "Worktree creation in git repo" test_git_repo_check
 
