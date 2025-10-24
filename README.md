@@ -116,6 +116,10 @@ yolo codex --help
 yolo -w claude
 yolo --worktree codex "experimental refactoring"
 
+# OpenCode (no extra flags added)
+yolo opencode "build"
+yolo -w opencode "run integration suite"
+
 # Help and version
 yolo --help
 yolo --version
@@ -123,6 +127,10 @@ yolo --version
 # Dry-run mode
 yolo --dry-run claude "test changes"
 yolo -n codex  # Short form
+
+# Quick cleanup (from repository root)
+git worktree remove .conductor/<agent>-<YYYYMMDD-HHMMSS>
+git branch -D yolo/<agent>/<YYYYMMDD-HHMMSS>
 ```
 
 ## How It Works
