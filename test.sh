@@ -44,24 +44,29 @@ run_test() {
 }
 
 # Check if yolo is installed
-if ! command -v yolo >/dev/null 2>&1; then
-    echo "Error: yolo command not found in PATH"
-    echo "Make sure to add ~/.local/bin to your PATH or run: export PATH=\"\$HOME/.local/bin:\$PATH\""
-    exit 1
+YOLO_CMD="./executable_yolo"
+if [ ! -x "$YOLO_CMD" ]; then
+    # Fallback to system yolo if local not available
+    if ! command -v yolo >/dev/null 2>&1; then
+        echo "Error: yolo command not found"
+        echo "Run from the yolo directory or install yolo to PATH"
+        exit 1
+    fi
+    YOLO_CMD="yolo"
 fi
 
-echo "Testing YOLO command..."
+echo "Testing YOLO command... (using $YOLO_CMD)"
 echo
 
 # Test 1: Help flag
 test_help() {
-    yolo --help >/dev/null 2>&1
+    $YOLO_CMD --help >/dev/null 2>&1
 }
 run_test "Help flag works" test_help
 
 # Test 2: Missing command error
 test_missing_command() {
-    ! yolo 2>/dev/null
+    ! $YOLO_CMD 2>/dev/null
 }
 run_test "Missing command shows error" test_missing_command
 
@@ -84,27 +89,30 @@ chmod +x /tmp/yolo-test/mock-agent
 # Test 4: Unknown command with --yolo flag
 test_unknown_command() {
     export PATH="/tmp/yolo-test:$PATH"
-    yolo mock-agent test-arg 2>&1 | grep -q "Running mock-agent with --yolo"
+    $YOLO_CMD mock-agent test-arg 2>&1 | grep -q "Running mock-agent with --yolo"
 }
 run_test "Unknown command gets --yolo flag" test_unknown_command
 
 # Test 5: Verify known command mappings (just check the logic, don't execute)
 test_command_mapping() {
     # Test that help shows all supported commands
-    yolo --help 2>&1 | grep -q "codex" && \
-    yolo --help 2>&1 | grep -q "claude" && \
-    yolo --help 2>&1 | grep -q "droid" && \
-    yolo --help 2>&1 | grep -q "amp" && \
-    yolo --help 2>&1 | grep -q "copilot"
+    $YOLO_CMD --help 2>&1 | grep -q "codex" && \
+    $YOLO_CMD --help 2>&1 | grep -q "claude" && \
+    $YOLO_CMD --help 2>&1 | grep -q "droid" && \
+    $YOLO_CMD --help 2>&1 | grep -q "amp" && \
+    $YOLO_CMD --help 2>&1 | grep -q "copilot" && \
+    $YOLO_CMD --help 2>&1 | grep -q "opencode"
 }
 run_test "Command mappings documented in help" test_command_mapping
 
 # Test 6: Worktree flag parsing (without actually creating worktree)
 test_worktree_flag() {
+    local original_dir="$PWD"
     # Test with non-git directory - should fail gracefully
     cd /tmp
     # Strip ANSI color codes for reliable grepping
-    output=$(yolo -w mock-agent test 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
+    output=$("$original_dir/$YOLO_CMD" -w mock-agent test 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
+    cd "$original_dir"
     echo "$output" | grep -q "not in a git repository"
     return $?
 }
@@ -112,6 +120,7 @@ run_test "Worktree flag requires git repository" test_worktree_flag
 
 # Test 7: Test in actual git repo
 test_git_repo_check() {
+    local original_dir="$PWD"
     # Create a temporary git repo
     temp_repo=$(mktemp -d)
     cd "$temp_repo"
@@ -124,12 +133,13 @@ test_git_repo_check() {
     
     # Test worktree creation
     export PATH="/tmp/yolo-test:$PATH"
-    yolo -w mock-agent "test" 2>&1 | grep -q "Creating worktree"
+    "$original_dir/$YOLO_CMD" -w mock-agent "test" 2>&1 | grep -q "Creating worktree"
     local result=$?
     
     # Cleanup
     cd /tmp
     rm -rf "$temp_repo"
+    cd "$original_dir"
     
     return $result
 }

@@ -223,6 +223,7 @@ print_color "$WHITE" "  • copilot  - GitHub Copilot"
 print_color "$WHITE" "  • droid    - Factory AI Droid"
 print_color "$WHITE" "  • amp      - Sourcegraph Amp"
 print_color "$WHITE" "  • cursor-agent - Cursor Agent"
+print_color "$WHITE" "  • opencode - OpenCode AI"
 print_color "$WHITE" "  • <other>  - Any other command (adds --yolo)"
 echo
 print_color "$YELLOW" "Usage examples:"
