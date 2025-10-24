@@ -23,7 +23,9 @@ print_color() {
 # Function to get flags for a command (with environment override support)
 get_flags_for_command() {
     local cmd="$1"
-    local env_var="YOLO_FLAGS_$(echo "$cmd" | tr '[:lower:]' '[:upper:]')"  # Convert to uppercase for env var name
+    local cmd_upper
+    cmd_upper=$(echo "$cmd" | tr '[:lower:]' '[:upper:]')
+    local env_var="YOLO_FLAGS_${cmd_upper}"  # Convert to uppercase for env var name
     local default_flags=""
 
     # Set default flags based on command
@@ -185,7 +187,7 @@ fi
 flags=$(get_flags_for_command "$cmd")
 if [ -n "$flags" ]; then
     print_color "$GREEN" "Running $cmd with $flags"
-    exec "$cmd" $flags "${rest_args[@]}"
+    exec "$cmd" "$flags" "${rest_args[@]}"
 else
     if ! command -v "$cmd" >/dev/null 2>&1; then
         print_color "$RED" "Error: command '$cmd' not found"
