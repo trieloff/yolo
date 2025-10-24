@@ -97,9 +97,15 @@ yolo copilot chat
 Create an isolated git worktree before launching the AI tool:
 
 ```bash
-# Create worktree in .conductor/claude-20251024-183537
-# with branch yolo/claude/20251024-183537
+# Create worktree in .conductor/claude-1 with branch claude-1
+# Prompts for cleanup when command finishes
 yolo -w claude "refactor the entire codebase"
+
+# Automatically clean up worktree after command completes
+yolo -w -c claude "quick experiment"
+
+# Preserve worktree after command completes (no prompt)
+yolo -w -nc claude "keep this work"
 
 # Work in isolation - changes are in the worktree
 # Original code remains untouched
@@ -108,10 +114,14 @@ yolo -w claude "refactor the entire codebase"
 **What happens in worktree mode:**
 1. Checks you're in a git repository
 2. Creates `.conductor/` directory
-3. Creates a new branch: `yolo/<command>/<timestamp>`
-4. Creates worktree at `.conductor/<command>-<timestamp>`
+3. Creates a new branch: `<command>-N` (where N is the lowest available number)
+4. Creates worktree at `.conductor/<command>-N`
 5. Changes to the worktree directory
 6. Launches the AI tool
+7. After completion:
+   - With `-c/--clean`: Automatically removes worktree and branch
+   - With `-nc/--no-clean`: Preserves worktree without prompting
+   - Without flags: Prompts user whether to clean up
 
 ### Supported Commands
 
@@ -139,8 +149,10 @@ yolo claude "fix all the bugs"
 yolo codex --help
 
 # Worktree mode
-yolo -w claude
-yolo --worktree codex "experimental refactoring"
+yolo -w claude                          # Prompt for cleanup
+yolo -w -c codex "quick test"           # Auto-cleanup
+yolo -w -nc claude "keep this"          # No cleanup
+yolo --worktree codex "refactoring"     # Prompt for cleanup
 
 # OpenCode (no extra flags added)
 yolo opencode "build"
@@ -204,10 +216,11 @@ yolo -w claude "big refactor"
 
 # YOLO does:
 # 1. Creates .conductor/ directory
-# 2. Creates branch: yolo/claude/20251024-183537
-# 3. Creates worktree: .conductor/claude-20251024-183537
-# 4. cd to worktree
-# 5. Runs: claude --dangerously-skip-permissions "big refactor"
+# 2. Finds lowest available number (e.g., 1)
+# 3. Creates branch: claude-1
+# 4. Creates worktree: .conductor/claude-1
+# 5. cd to worktree
+# 6. Runs: claude --dangerously-skip-permissions "big refactor"
 ```
 
 ## Worktree Benefits
@@ -236,22 +249,35 @@ yolo -w claude "fix the memory leak"
 ```
 your-repo/
 ├── .conductor/
-│   ├── claude-20251024-101530/   # Session 1
-│   ├── claude-20251024-143022/   # Session 2
-│   └── codex-20251024-160815/    # Session 3
+│   ├── claude-1/   # Session 1
+│   ├── claude-2/   # Session 2
+│   └── codex-1/    # Session 3
 └── (your main code)
 ```
 
 ### Cleaning Up Worktrees
 
-After you're done with a worktree session, you can clean it up:
+YOLO can automatically clean up worktrees after command completion:
+
+```bash
+# Automatic cleanup with -c flag
+yolo -w -c claude "quick experiment"    # Cleans up automatically when done
+
+# No cleanup with -nc flag
+yolo -w -nc claude "keep this work"     # Preserves worktree
+
+# Prompt mode (default)
+yolo -w claude "some work"              # Asks if you want to clean up
+```
+
+Manual cleanup if needed:
 
 ```bash
 # Remove a specific worktree
-git worktree remove .conductor/claude-20251024-183537
+git worktree remove .conductor/claude-1
 
 # Delete the associated branch
-git branch -D yolo/claude/20251024-183537
+git branch -D claude-1
 
 # Or clean up all worktrees at once
 rm -rf .conductor

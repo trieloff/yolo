@@ -178,9 +178,9 @@ echo "Args: $@"
 EOF
     chmod +x "$echo_cmd"
 
-    # Test worktree creation
+    # Test worktree creation (use -nc to avoid cleanup prompt in tests)
     local output
-    if output=$(PATH="/tmp:$PATH" "$YOLO_CMD" -w echo "test" 2>&1); then
+    if output=$(PATH="/tmp:$PATH" "$YOLO_CMD" -w -nc echo "test" 2>&1); then
         if [[ -d "$test_repo/.conductor" ]]; then
             print_pass "Worktree directory .conductor created"
 
