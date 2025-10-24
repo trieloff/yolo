@@ -1,154 +1,81 @@
 #!/bin/bash
 
 # Test script for YOLO
-# Validates basic functionality without requiring actual AI tools
 
-set -e
+# Mock commands
+mkdir -p mocks
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+echo '#!/bin/bash
+echo "codex $@"' > mocks/codex
+chmod +x mocks/codex
 
-print_test() {
-    printf "${BLUE}[TEST]${NC} %s\n" "$*"
-}
+echo '#!/bin/bash
+echo "claude $@"' > mocks/claude
+chmod +x mocks/claude
 
-print_pass() {
-    printf "${GREEN}[PASS]${NC} %s\n" "$*"
-}
+echo '#!/bin/bash
+echo "copilot $@"' > mocks/copilot
+chmod +x mocks/copilot
 
-print_fail() {
-    printf "${RED}[FAIL]${NC} %s\n" "$*"
-}
+echo '#!/bin/bash
+echo "droid $@"' > mocks/droid
+chmod +x mocks/droid
 
-# Test counter
-TESTS_RUN=0
-TESTS_PASSED=0
+echo '#!/bin/bash
+echo "amp $@"' > mocks/amp
+chmod +x mocks/amp
 
-run_test() {
-    local test_name="$1"
-    shift
-    TESTS_RUN=$((TESTS_RUN + 1))
-    print_test "$test_name"
-    if "$@"; then
-        TESTS_PASSED=$((TESTS_PASSED + 1))
-        print_pass "$test_name"
-        return 0
-    else
-        print_fail "$test_name"
-        return 1
-    fi
-}
+echo '#!/bin/bash
+echo "cursor-agent $@"' > mocks/cursor-agent
+chmod +x mocks/cursor-agent
 
-# Check if yolo is installed
-if ! command -v yolo >/dev/null 2>&1; then
-    echo "Error: yolo command not found in PATH"
-    echo "Make sure to add ~/.local/bin to your PATH or run: export PATH=\"\$HOME/.local/bin:\$PATH\""
+echo '#!/bin/bash
+echo "other $@"' > mocks/other
+chmod +x mocks/other
+
+export PATH="$(pwd)/mocks:$PATH"
+
+# Run tests
+output=$(./executable_yolo codex test)
+if [ "$output" != "codex --dangerously-bypass-approvals-and-sandbox test" ]; then
+    echo "Test failed for codex"
     exit 1
 fi
 
-echo "Testing YOLO command..."
-echo
-
-# Test 1: Help flag
-test_help() {
-    yolo --help >/dev/null 2>&1
-}
-run_test "Help flag works" test_help
-
-# Test 2: Missing command error
-test_missing_command() {
-    ! yolo 2>/dev/null
-}
-run_test "Missing command shows error" test_missing_command
-
-# Test 3: Create a mock command for testing
-mkdir -p /tmp/yolo-test
-cat > /tmp/yolo-test/mock-agent <<'EOF'
-#!/bin/bash
-# Mock AI agent for testing
-echo "Mock agent called with args: $*"
-# Check if --yolo flag was passed
-for arg in "$@"; do
-    if [ "$arg" = "--yolo" ]; then
-        exit 0
-    fi
-done
-exit 1
-EOF
-chmod +x /tmp/yolo-test/mock-agent
-
-# Test 4: Unknown command with --yolo flag
-test_unknown_command() {
-    export PATH="/tmp/yolo-test:$PATH"
-    yolo mock-agent test-arg 2>&1 | grep -q "Running mock-agent with --yolo"
-}
-run_test "Unknown command gets --yolo flag" test_unknown_command
-
-# Test 5: Verify known command mappings (just check the logic, don't execute)
-test_command_mapping() {
-    # Test that help shows all supported commands
-    yolo --help 2>&1 | grep -q "codex" && \
-    yolo --help 2>&1 | grep -q "claude" && \
-    yolo --help 2>&1 | grep -q "droid" && \
-    yolo --help 2>&1 | grep -q "amp" && \
-    yolo --help 2>&1 | grep -q "copilot"
-}
-run_test "Command mappings documented in help" test_command_mapping
-
-# Test 6: Worktree flag parsing (without actually creating worktree)
-test_worktree_flag() {
-    # Test with non-git directory - should fail gracefully
-    cd /tmp
-    # Strip ANSI color codes for reliable grepping
-    output=$(yolo -w mock-agent test 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
-    echo "$output" | grep -q "not in a git repository"
-    return $?
-}
-run_test "Worktree flag requires git repository" test_worktree_flag
-
-# Test 7: Test in actual git repo
-test_git_repo_check() {
-    # Create a temporary git repo
-    temp_repo=$(mktemp -d)
-    cd "$temp_repo"
-    git init >/dev/null 2>&1
-    git config user.email "test@example.com"
-    git config user.name "Test User"
-    echo "test" > test.txt
-    git add test.txt
-    git commit -m "Initial commit" >/dev/null 2>&1
-    
-    # Test worktree creation
-    export PATH="/tmp/yolo-test:$PATH"
-    yolo -w mock-agent "test" 2>&1 | grep -q "Creating worktree"
-    local result=$?
-    
-    # Cleanup
-    cd /tmp
-    rm -rf "$temp_repo"
-    
-    return $result
-}
-run_test "Worktree creation in git repo" test_git_repo_check
-
-# Cleanup
-rm -rf /tmp/yolo-test
-
-echo
-echo "================================"
-echo "Tests run: $TESTS_RUN"
-echo "Tests passed: $TESTS_PASSED"
-echo "Tests failed: $((TESTS_RUN - TESTS_PASSED))"
-echo "================================"
-
-if [ $TESTS_PASSED -eq $TESTS_RUN ]; then
-    print_pass "All tests passed!"
-    exit 0
-else
-    print_fail "Some tests failed"
+output=$(./executable_yolo claude test)
+if [ "$output" != "claude --dangerously-skip-permissions test" ]; then
+    echo "Test failed for claude"
     exit 1
 fi
+
+output=$(./executable_yolo copilot test)
+if [ "$output" != "copilot --allow-all-tools --allow-all-paths test" ]; then
+    echo "Test failed for copilot"
+    exit 1
+fi
+
+output=$(./executable_yolo droid test)
+if [ "$output" != "droid --skip-permissions-unsafe test" ]; then
+    echo "Test failed for droid"
+    exit 1
+fi
+
+output=$(./executable_yolo amp test)
+if [ "$output" != "amp --dangerously-allow-all test" ]; then
+    echo "Test failed for amp"
+    exit 1
+fi
+
+output=$(./executable_yolo cursor-agent test)
+if [ "$output" != "cursor-agent --force test" ]; then
+    echo "Test failed for cursor-agent"
+    exit 1
+fi
+
+output=$(./executable_yolo other test)
+if [ "$output" != "other --yolo test" ]; then
+    echo "Test failed for other"
+    exit 1
+fi
+
+echo "All tests passed"

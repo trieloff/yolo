@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# YOLO Installer Script
-# Installs the yolo command to ~/.local/bin
+# AI-Aligned-YOLO Installer Script
+# Installs the yolo wrapper to ~/.local/bin
 # Supports both local installation and curl | sh
 #
 # Usage with curl:
@@ -61,7 +61,7 @@ is_in_path() {
     local dir=$1
     print_verbose "Checking if '$dir' is in PATH..."
     print_verbose "Current PATH: $PATH"
-    if [[ ":$PATH:" == *":$dir:"* ]]; then
+    if [[ ":$PATH:" == ".*:"$dir:":" ]]; then
         print_verbose "Directory '$dir' is in PATH"
         return 0
     else
@@ -80,7 +80,7 @@ detect_shell() {
         echo "$shell_name"
     else
         print_verbose "SHELL variable not set, defaulting to bash"
-        echo "bash"
+        echo "bash"  # Default to bash
     fi
 }
 
@@ -102,36 +102,14 @@ get_shell_config() {
         fish)
             echo "$HOME/.config/fish/config.fish"
             ;;
-        elvish)
-            echo "$HOME/.config/elvish/rc.elv"
-            ;;
         *)
             echo "$HOME/.profile"
             ;;
     esac
 }
 
-# Function to check prerequisites
-check_prerequisites() {
-    print_color "$BLUE" "Checking prerequisites..."
-    
-    # Check if git is installed (needed for worktree support)
-    if ! command_exists git; then
-        print_color "$YELLOW" "Warning: git is not installed"
-        print_color "$YELLOW" "Worktree functionality will not be available"
-    else
-        print_color "$GREEN" "✓ git is installed"
-    fi
-    
-    print_color "$GREEN" "✓ Prerequisites check complete"
-}
-
 # Main installation
-print_color "$BLUE" "=== YOLO Installer ==="
-echo
-
-# Check prerequisites
-check_prerequisites
+print_color "$BLUE" "=== AI-Aligned-YOLO Installer ==="
 echo
 
 # Create installation directory
@@ -140,29 +118,14 @@ mkdir -p "$INSTALL_DIR"
 print_color "$GREEN" "✓ Directory created: $INSTALL_DIR"
 echo
 
-# Check if yolo already exists
-if [ -f "$INSTALL_DIR/$SCRIPT_NAME" ] && [ "$UPGRADE" != "true" ]; then
-    # Check if it's our version
-    if grep -q "YOLO - Run AI coding agents" "$INSTALL_DIR/$SCRIPT_NAME" 2>/dev/null; then
-        print_color "$YELLOW" "YOLO is already installed at $INSTALL_DIR/$SCRIPT_NAME"
-        print_color "$YELLOW" "To upgrade, run with UPGRADE=true:"
-        print_color "$WHITE" "  UPGRADE=true $0"
-        exit 0
-    else
-        print_color "$RED" "Warning: $INSTALL_DIR/$SCRIPT_NAME exists but doesn't appear to be YOLO"
-        print_color "$YELLOW" "Please backup or remove it before installing"
-        exit 1
-    fi
-fi
-
-# Download or copy the script
-print_color "$BLUE" "Installing yolo script..."
+# Download or copy the wrapper script
+print_color "$BLUE" "Installing wrapper script..."
 if [ -f "$SOURCE_SCRIPT" ]; then
     # Local installation
     print_verbose "Copying from local file: $SOURCE_SCRIPT"
     cp "$SOURCE_SCRIPT" "$INSTALL_DIR/$SCRIPT_NAME"
     chmod +x "$INSTALL_DIR/$SCRIPT_NAME"
-    print_color "$GREEN" "✓ Script installed from local file"
+    print_color "$GREEN" "✓ Wrapper script installed from local file"
 else
     # Remote installation
     print_verbose "Downloading from: $RAW_BASE_URL/$SOURCE_SCRIPT"
@@ -175,7 +138,7 @@ else
         exit 1
     fi
     chmod +x "$INSTALL_DIR/$SCRIPT_NAME"
-    print_color "$GREEN" "✓ Script downloaded and installed"
+    print_color "$GREEN" "✓ Wrapper script downloaded and installed"
 fi
 echo
 
@@ -192,15 +155,11 @@ else
     
     case "$shell_name" in
         fish)
-            print_color "$WHITE" "  echo 'set -gx PATH $INSTALL_DIR \$PATH' >> $config_file"
+            print_color "$WHITE" "  echo 'set -gx PATH $INSTALL_DIR $PATH' >> $config_file"
             print_color "$WHITE" "  source $config_file"
             ;;
-        elvish)
-            print_color "$WHITE" "  echo 'set paths = [$INSTALL_DIR \$@paths]' >> $config_file"
-            print_color "$WHITE" "  # Then restart your shell or source the file"
-            ;;
         *)
-            print_color "$WHITE" "  echo 'export PATH=\"$INSTALL_DIR:\$PATH\"' >> $config_file"
+            print_color "$WHITE" "  echo 'export PATH=\"$INSTALL_DIR:$PATH\"' >> $config_file"
             print_color "$WHITE" "  source $config_file"
             ;;
     esac
@@ -209,25 +168,14 @@ fi
 echo
 print_color "$GREEN" "=== Installation Complete! ==="
 echo
-print_color "$BLUE" "The YOLO command has been installed."
+print_color "$BLUE" "The AI-Aligned-YOLO wrapper has been installed."
 echo
 print_color "$YELLOW" "What it does:"
-print_color "$WHITE" "  • Runs AI coding agents with appropriate bypass flags"
-print_color "$WHITE" "  • Supports worktree creation for isolated work (-w flag)"
-print_color "$WHITE" "  • Maps agent commands to their specific flags automatically"
+print_color "$WHITE" "  • Wraps AI coding agents to add bypass flags"
+print_color "$WHITE" "  • Supports creating git worktrees for isolated environments"
 echo
-print_color "$YELLOW" "Supported agents:"
-print_color "$WHITE" "  • codex    - Anthropic Code"
-print_color "$WHITE" "  • claude   - Claude Code"
-print_color "$WHITE" "  • copilot  - GitHub Copilot"
-print_color "$WHITE" "  • droid    - Factory AI Droid"
-print_color "$WHITE" "  • amp      - Sourcegraph Amp"
-print_color "$WHITE" "  • cursor-agent - Cursor Agent"
-print_color "$WHITE" "  • <other>  - Any other command (adds --yolo)"
+print_color "$YELLOW" "Next steps:"
+print_color "$WHITE" "  1. Ensure $INSTALL_DIR is in your PATH (see above if needed)"
+print_color "$WHITE" "  2. Test with: yolo --help"
 echo
-print_color "$YELLOW" "Usage examples:"
-print_color "$WHITE" "  yolo claude 'Fix the bug in src/main.js'"
-print_color "$WHITE" "  yolo -w droid 'Refactor authentication'"
-print_color "$WHITE" "  yolo --help"
-echo
-print_color "$GREEN" "Enjoy faster AI-assisted development!"
+print_color "$GREEN" "Enjoy your reckless coding!"
