@@ -101,6 +101,7 @@ yolo -w claude "refactor the entire codebase"
 | `droid` | `--skip-permissions-unsafe` |
 | `amp` | `--dangerously-allow-all` |
 | `cursor-agent` | `--force` |
+| `opencode` | *(no flags)* |
 | *(other)* | `--yolo` |
 
 ### Examples
@@ -224,10 +225,16 @@ yolo claude
 export YOLO_FLAGS_claude="--custom-flag --another-flag"
 yolo claude  # Uses custom flags instead of --dangerously-skip-permissions
 
+# For commands with hyphens, use underscores in env var names
+export YOLO_FLAGS_cursor_agent="--custom-force-flag"
+yolo cursor-agent  # Uses custom flags instead of --force
+
 # Override for any command
 export YOLO_FLAGS_mycommand="--special-mode"
 yolo mycommand  # Uses --special-mode instead of --yolo
 ```
+
+**Note**: Command names with hyphens (like `cursor-agent`) are converted to underscores in environment variable names (e.g., `YOLO_FLAGS_cursor_agent`).
 
 ### Dry-Run Mode
 
