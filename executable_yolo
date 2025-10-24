@@ -4,7 +4,9 @@
 # Portable replacement for the Elvish yolo function
 # Supports automatic worktree creation and per-agent flag mapping
 
-set -e
+set -e -u -o pipefail
+
+VERSION="1.0.0"
 
 # Colors for output
 RED='\033[0;31m'
@@ -19,6 +21,13 @@ print_color() {
     printf "${color}%s${NC}\n" "$*" >&2
 }
 
+# Function to print debug output
+debug_log() {
+    if [ "${YOLO_DEBUG:-false}" = "true" ]; then
+        print_color "$YELLOW" "[DEBUG] $*"
+    fi
+}
+
 # Function to show usage
 show_usage() {
     cat >&2 <<EOF
@@ -28,6 +37,8 @@ Usage: yolo [OPTIONS] COMMAND [ARGS...]
 
 Options:
   -w, --worktree    Create a git worktree before running the command
+  -n, --dry-run     Show what would be executed without running it
+  -v, --version     Show version information
   -h, --help        Show this help message
 
 Supported Commands:
@@ -39,21 +50,35 @@ Supported Commands:
   cursor-agent      Cursor Agent (adds --force)
   <other>           Any other command (adds --yolo)
 
+Environment Variables:
+  YOLO_DEBUG             Enable debug output (true/false)
+  YOLO_FLAGS_<agent>     Override flags for specific agent (e.g., YOLO_FLAGS_claude="--custom-flag")
+
 Examples:
   yolo claude "Fix the bug in src/main.js"
   yolo -w droid "Refactor the authentication module"
-  yolo codex --help
+  yolo --dry-run codex --help
+  YOLO_FLAGS_claude="--other-flag" yolo claude "test"
 
 EOF
 }
 
 # Parse options
 use_worktree=false
+dry_run=false
 while [[ $# -gt 0 ]]; do
     case $1 in
         -w|--worktree)
             use_worktree=true
             shift
+            ;;
+        -n|--dry-run)
+            dry_run=true
+            shift
+            ;;
+        -v|--version)
+            echo "yolo version $VERSION"
+            exit 0
             ;;
         -h|--help)
             show_usage
@@ -90,9 +115,14 @@ if [ "$use_worktree" = true ]; then
         exit 1
     fi
 
-    # Create .conductor directory if it doesn't exist
-    conductor_dir=".conductor"
+    # Get repo root to avoid nested .conductor directories
+    repo_root=$(git rev-parse --show-toplevel)
+    debug_log "Repository root: $repo_root"
+
+    # Create .conductor directory at repo root if it doesn't exist
+    conductor_dir="$repo_root/.conductor"
     if [ ! -d "$conductor_dir" ]; then
+        debug_log "Creating .conductor directory at repo root"
         mkdir -p "$conductor_dir"
     fi
 
@@ -101,51 +131,77 @@ if [ "$use_worktree" = true ]; then
     branch_name="yolo/$cmd/$timestamp"
     worktree_path="$conductor_dir/$cmd-$timestamp"
 
-    print_color "$BLUE" "Creating worktree at $worktree_path with branch $branch_name"
+    debug_log "Branch name: $branch_name"
+    debug_log "Worktree path: $worktree_path"
 
-    # Create the worktree
-    if ! git worktree add -b "$branch_name" "$worktree_path" 2>&1; then
-        print_color "$RED" "Error: failed to create worktree"
-        exit 1
-    fi
+    if [ "$dry_run" = true ]; then
+        print_color "$YELLOW" "[DRY RUN] Would create worktree at $worktree_path with branch $branch_name"
+    else
+        print_color "$BLUE" "Creating worktree at $worktree_path with branch $branch_name"
 
-    print_color "$BLUE" "Switching to worktree..."
-    cd "$worktree_path" || exit 1
-fi
-
-# Map commands to their appropriate bypass flags
-case "$cmd" in
-    codex)
-        print_color "$GREEN" "Running codex with --dangerously-bypass-approvals-and-sandbox"
-        exec codex --dangerously-bypass-approvals-and-sandbox "${rest_args[@]}"
-        ;;
-    claude)
-        print_color "$GREEN" "Running claude with --dangerously-skip-permissions"
-        exec claude --dangerously-skip-permissions "${rest_args[@]}"
-        ;;
-    copilot)
-        print_color "$GREEN" "Running copilot with --allow-all-tools --allow-all-paths"
-        exec copilot --allow-all-tools --allow-all-paths "${rest_args[@]}"
-        ;;
-    droid)
-        print_color "$GREEN" "Running droid with --skip-permissions-unsafe"
-        exec droid --skip-permissions-unsafe "${rest_args[@]}"
-        ;;
-    amp)
-        print_color "$GREEN" "Running amp with --dangerously-allow-all"
-        exec amp --dangerously-allow-all "${rest_args[@]}"
-        ;;
-    cursor-agent)
-        print_color "$GREEN" "Running cursor-agent with --force"
-        exec cursor-agent --force "${rest_args[@]}"
-        ;;
-    *)
-        # For all others, check if command exists and add --yolo
-        if ! command -v "$cmd" >/dev/null 2>&1; then
-            print_color "$RED" "Error: command '$cmd' not found"
+        # Create the worktree
+        if ! git worktree add -b "$branch_name" "$worktree_path" 2>&1; then
+            print_color "$RED" "Error: failed to create worktree"
             exit 1
         fi
-        print_color "$GREEN" "Running $cmd with --yolo"
-        exec "$cmd" --yolo "${rest_args[@]}"
-        ;;
-esac
+
+        print_color "$BLUE" "Switching to worktree..."
+        cd "$worktree_path" || exit 1
+    fi
+fi
+
+# Build flag array based on agent and environment overrides
+agent_flags=()
+env_var_name="YOLO_FLAGS_${cmd//-/_}"  # Replace hyphens with underscores for valid var names
+
+if [ -n "${!env_var_name:-}" ]; then
+    # Use environment variable override
+    debug_log "Using environment variable override: $env_var_name=${!env_var_name}"
+    read -ra agent_flags <<< "${!env_var_name}"
+else
+    # Use default flags for known agents
+    case "$cmd" in
+        codex)
+            agent_flags=("--dangerously-bypass-approvals-and-sandbox")
+            ;;
+        claude)
+            agent_flags=("--dangerously-skip-permissions")
+            ;;
+        copilot)
+            agent_flags=("--allow-all-tools" "--allow-all-paths")
+            ;;
+        droid)
+            agent_flags=("--skip-permissions-unsafe")
+            ;;
+        amp)
+            agent_flags=("--dangerously-allow-all")
+            ;;
+        cursor-agent|cursor_agent)
+            agent_flags=("--force")
+            ;;
+        *)
+            # For all others, add --yolo
+            agent_flags=("--yolo")
+            ;;
+    esac
+fi
+
+# Check if command exists
+if ! command -v "$cmd" >/dev/null 2>&1; then
+    print_color "$RED" "Error: command '$cmd' not found"
+    exit 1
+fi
+
+# Build complete command array
+full_command=("$cmd" "${agent_flags[@]}" "${rest_args[@]}")
+
+debug_log "Command: ${full_command[*]}"
+
+# Execute or show dry run
+if [ "$dry_run" = true ]; then
+    print_color "$YELLOW" "[DRY RUN] Would execute: ${full_command[*]}"
+    exit 0
+else
+    print_color "$GREEN" "Running $cmd with ${agent_flags[*]}"
+    exec "${full_command[@]}"
+fi
