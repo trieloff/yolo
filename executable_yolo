@@ -90,8 +90,8 @@ case "$COMMAND" in
         FLAGS+=(--dangerously-bypass-approvals-and-sandbox)
         ;;
     claude)
-        YOLO_FLAGS_claude=${YOLO_FLAGS_claude:="--dangerously-skip-permissions"}
-        FLAGS+=($YOLO_FLAGS_claude)
+        YOLO_FLAGS_claude=${YOLO_FLAGS_claude:-"--dangerously-skip-permissions"}
+        FLAGS+=("$YOLO_FLAGS_claude")
         ;;
     copilot)
         FLAGS+=(--allow-all-tools --allow-all-paths)
