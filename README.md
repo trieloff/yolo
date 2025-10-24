@@ -1,3 +1,5 @@
+![YOLO - AI CLI Wrapper with Worktree Isolation](hero-banner.jpg)
+
 # YOLO - AI CLI Tool Wrapper with Worktree Support
 
 > "You Only Launch Once... but in an isolated git worktree!"
