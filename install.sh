@@ -4,7 +4,7 @@
 # Installs the yolo wrapper to ~/.local/bin/yolo
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/trieloff/ai-aligned-yolo/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/trieloff/yolo/main/install.sh | sh
 #   OR
 #   ./install.sh
 #
@@ -22,7 +22,7 @@ WRAPPER_PATH="$INSTALL_DIR/$WRAPPER_NAME"
 
 # GitHub repository information
 REPO_OWNER="trieloff"
-REPO_NAME="ai-aligned-yolo"
+REPO_NAME="yolo"
 REPO_URL="https://github.com/$REPO_OWNER/$REPO_NAME"
 RAW_URL="https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/main"
 
@@ -217,19 +217,19 @@ add_to_path() {
     case "$shell_name" in
         bash|zsh)
             echo "" >> "$config_file"
-            echo "# Added by ai-aligned-yolo installer" >> "$config_file"
+            echo "# Added by yolo installer" >> "$config_file"
             echo "export PATH=\"$INSTALL_DIR:\$PATH\"" >> "$config_file"
             ;;
         fish)
             mkdir -p "$(dirname "$config_file")"
             echo "" >> "$config_file"
-            echo "# Added by ai-aligned-yolo installer" >> "$config_file"
+            echo "# Added by yolo installer" >> "$config_file"
             echo "set -gx PATH $INSTALL_DIR \$PATH" >> "$config_file"
             ;;
         elvish)
             mkdir -p "$(dirname "$config_file")"
             echo "" >> "$config_file"
-            echo "# Added by ai-aligned-yolo installer" >> "$config_file"
+            echo "# Added by yolo installer" >> "$config_file"
             echo "set paths = [$INSTALL_DIR \$@paths]" >> "$config_file"
             ;;
         *)

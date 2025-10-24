@@ -71,6 +71,7 @@ Usage: yolo [OPTIONS] <command> [args...]
 
 Options:
   -w, --worktree    Create a git worktree in .conductor/ before running command
+  -n, --dry-run     Show what would be executed without running it
   -h, --help        Show this help message
   -v, --version     Show version information
 
@@ -165,6 +166,15 @@ create_worktree() {
 get_command_flags() {
     local cmd="$1"
 
+    # Check for environment-based flag override
+    # e.g., YOLO_FLAGS_claude="--custom-flag"
+    local env_var="YOLO_FLAGS_${cmd}"
+    if [[ -n "${!env_var:-}" ]]; then
+        echo "${!env_var}"
+        return
+    fi
+
+    # Default flags based on command
     case "$cmd" in
         codex)
             echo "--dangerously-bypass-approvals-and-sandbox"
@@ -198,6 +208,7 @@ command_exists() {
 # Main function
 main() {
     local use_worktree=false
+    local dry_run=false
     local command_name=""
     local command_args=()
 
@@ -214,6 +225,10 @@ main() {
                 ;;
             -w|--worktree)
                 use_worktree=true
+                shift
+                ;;
+            -n|--dry-run)
+                dry_run=true
                 shift
                 ;;
             -*)
@@ -271,6 +286,13 @@ main() {
 
     # Add remaining arguments
     full_command+=("${command_args[@]}")
+
+    # Dry-run mode: show what would be executed without running
+    if [[ "$dry_run" == "true" ]]; then
+        print_info "Dry-run mode - would execute:"
+        echo "${full_command[*]}"
+        exit 0
+    fi
 
     # Print what we're about to execute (for transparency)
     if [[ "${YOLO_DEBUG:-false}" == "true" ]]; then

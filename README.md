@@ -7,7 +7,7 @@ YOLO is a command-line wrapper for AI coding assistants that automatically adds 
 Part of the **AI-Aligned** toolchain:
 - [ai-aligned-git](https://github.com/trieloff/ai-aligned-git) - Git wrapper for safe AI commit practices
 - [ai-aligned-gh](https://github.com/trieloff/ai-aligned-gh) - GitHub CLI wrapper for proper AI attribution
-- **ai-aligned-yolo** - AI CLI launcher with worktree isolation (this project)
+- **yolo** - AI CLI launcher with worktree isolation (this project)
 
 ## Features
 
@@ -31,14 +31,14 @@ AI coding assistants often require various "bypass" or "danger" flags to operate
 ### Quick Install (Recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/trieloff/ai-aligned-yolo/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/trieloff/yolo/main/install.sh | sh
 ```
 
 ### Manual Install
 
 ```bash
-git clone https://github.com/trieloff/ai-aligned-yolo.git
-cd ai-aligned-yolo
+git clone https://github.com/trieloff/yolo.git
+cd yolo
 ./install.sh
 ```
 
@@ -118,6 +118,10 @@ yolo --worktree codex "experimental refactoring"
 # Help and version
 yolo --help
 yolo --version
+
+# Dry-run mode
+yolo --dry-run claude "test changes"
+yolo -n codex  # Short form
 ```
 
 ## How It Works
@@ -182,6 +186,31 @@ your-repo/
 └── (your main code)
 ```
 
+### Cleaning Up Worktrees
+
+After you're done with a worktree session, you can clean it up:
+
+```bash
+# Remove a specific worktree
+git worktree remove .conductor/claude-20251024-183537
+
+# Delete the associated branch
+git branch -D yolo/claude/20251024-183537
+
+# Or clean up all worktrees at once
+rm -rf .conductor
+git worktree prune
+
+# List all worktrees to see what's active
+git worktree list
+```
+
+**Tip**: Add `.conductor/` to your `.gitignore` to keep worktree directories out of your repository:
+
+```bash
+echo "/.conductor/" >> .gitignore
+```
+
 ## Configuration
 
 ### Environment Variables
@@ -190,6 +219,30 @@ your-repo/
 # Enable debug output
 export YOLO_DEBUG=true
 yolo claude
+
+# Override flags for specific commands
+export YOLO_FLAGS_claude="--custom-flag --another-flag"
+yolo claude  # Uses custom flags instead of --dangerously-skip-permissions
+
+# Override for any command
+export YOLO_FLAGS_mycommand="--special-mode"
+yolo mycommand  # Uses --special-mode instead of --yolo
+```
+
+### Dry-Run Mode
+
+Preview what YOLO would execute without actually running the command:
+
+```bash
+# See what would be executed
+yolo --dry-run claude "implement feature"
+
+# Output:
+# Dry-run mode - would execute:
+# claude --dangerously-skip-permissions implement feature
+
+# Combine with worktree mode
+yolo -w --dry-run claude "big refactor"
 ```
 
 ## Uninstallation
