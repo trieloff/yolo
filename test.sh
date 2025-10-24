@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -euo pipefail
+
 # Test script for YOLO
 
 # Mock commands
@@ -30,12 +32,28 @@ echo "cursor-agent $@"' > mocks/cursor-agent
 chmod +x mocks/cursor-agent
 
 echo '#!/bin/bash
+echo "opencode $@"' > mocks/opencode
+chmod +x mocks/opencode
+
+echo '#!/bin/bash
 echo "other $@"' > mocks/other
 chmod +x mocks/other
 
 export PATH="$(pwd)/mocks:$PATH"
 
 # Run tests
+output=$(./executable_yolo --version)
+if [ "$output" != "0.1.0" ]; then
+    echo "Test failed for --version"
+    exit 1
+fi
+
+output=$(./executable_yolo --dry-run codex test)
+if [ "$output" != "codex --dangerously-bypass-approvals-and-sandbox test" ]; then
+    echo "Test failed for --dry-run codex"
+    exit 1
+fi
+
 output=$(./executable_yolo codex test)
 if [ "$output" != "codex --dangerously-bypass-approvals-and-sandbox test" ]; then
     echo "Test failed for codex"
@@ -47,6 +65,14 @@ if [ "$output" != "claude --dangerously-skip-permissions test" ]; then
     echo "Test failed for claude"
     exit 1
 fi
+
+YOLO_FLAGS_claude="--custom-flag"
+output=$(./executable_yolo claude test)
+if [ "$output" != "claude --custom-flag test" ]; then
+    echo "Test failed for YOLO_FLAGS_claude"
+    exit 1
+fi
+unset YOLO_FLAGS_claude
 
 output=$(./executable_yolo copilot test)
 if [ "$output" != "copilot --allow-all-tools --allow-all-paths test" ]; then
@@ -72,10 +98,32 @@ if [ "$output" != "cursor-agent --force test" ]; then
     exit 1
 fi
 
+output=$(./executable_yolo opencode test)
+if [ "$output" != "opencode test" ]; then
+    echo "Test failed for opencode"
+    exit 1
+fi
+
 output=$(./executable_yolo other test)
 if [ "$output" != "other --yolo test" ]; then
     echo "Test failed for other"
     exit 1
 fi
+
+# Test worktree
+if git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+    git init
+fi
+output=$(./executable_yolo -w other test)
+if [ ! -d ".conductor/other-"* ]; then
+    echo "Test failed for worktree creation"
+    exit 1
+fi
+
+if [ "$output" != "other --yolo test" ]; then
+    echo "Test failed for worktree command"
+    exit 1
+fi
+
 
 echo "All tests passed"

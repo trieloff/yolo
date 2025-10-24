@@ -1,79 +1,120 @@
 #!/bin/bash
 
-# YOLO - Run AI coding agents with appropriate bypass flags
+set -euo pipefail
+
+VERSION="0.1.0"
 
 # Function to show help message
 show_help() {
-    echo "YOLO - Run AI coding agents with appropriate bypass flags"
-    echo ""
-    echo "Usage: yolo [OPTIONS] COMMAND [ARGS...]"
-    echo ""
-    echo "Options:"
-    echo "  -w, --worktree    Create a git worktree before running the command"
-    echo "  -h, --help        Show this help message"
-    echo ""
-    echo "Supported Commands:"
-    echo "  codex             Anthropic Code (adds --dangerously-bypass-approvals-and-sandbox)"
-    echo "  claude            Claude Code (adds --dangerously-skip-permissions)"
-    echo "  copilot           GitHub Copilot (adds --allow-all-tools --allow-all-paths)"
-    echo "  droid             Factory AI Droid (adds --skip-permissions-unsafe)"
-    echo "  amp               Sourcegraph Amp (adds --dangerously-allow-all)"
-    echo "  cursor-agent      Cursor Agent (adds --force)"
-    echo "  <other>           Any other command (adds --yolo)"
-    echo ""
-    echo "Examples:"
-    echo "  yolo claude "Fix the bug in src/main.js""
-    echo "  yolo -w droid "Refactor the authentication module""
-    echo "  yolo codex --help"
+    cat <<EOF
+YOLO - Run AI coding agents with appropriate bypass flags
+
+Usage: yolo [OPTIONS] COMMAND [ARGS...]
+
+Options:
+  -w, --worktree    Create a git worktree before running the command
+  -h, --help        Show this help message
+  --version         Show version information
+  --dry-run         Show the command that would be executed
+
+Supported Commands:
+  codex             Anthropic Code (adds --dangerously-bypass-approvals-and-sandbox)
+  claude            Claude Code (adds --dangerously-skip-permissions)
+  copilot           GitHub Copilot (adds --allow-all-tools --allow-all-paths)
+  droid             Factory AI Droid (adds --skip-permissions-unsafe)
+  amp               Sourcegraph Amp (adds --dangerously-allow-all)
+  cursor-agent      Cursor Agent (adds --force)
+  opencode          OpenCode (no extra flags)
+  <other>           Any other command (adds --yolo)
+
+Examples:
+  yolo claude "Fix the bug in src/main.js"
+  yolo -w droid "Refactor the authentication module"
+  yolo codex --help
+EOF
 }
 
 # Main script
 WORKTREE=false
-if [ "$1" = "-w" ] || [ "$1" = "--worktree" ]; then
-    WORKTREE=true
-    shift
-fi
+DRY_RUN=false
+ARGS=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -w|--worktree)
+            WORKTREE=true
+            shift
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        --version)
+            echo "$VERSION"
+            exit 0
+            ;;
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        *)
+            ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
 
-if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
-    show_help
-    exit 0
-fi
-
-if [ -z "$1" ]; then
+if [ ${#ARGS[@]} -eq 0 ]; then
     echo "Error: missing command argument"
     show_help
     exit 1
 fi
 
-COMMAND="$1"
-shift
+COMMAND="${ARGS[0]}"
+ARGS=("${ARGS[@]:1}")
 
 if [ "$WORKTREE" = true ]; then
-    BRANCH_NAME="yolo-$(date +%s)"
-    git worktree add -b "$BRANCH_NAME" ".yolo/$BRANCH_NAME"
-    cd ".yolo/$BRANCH_NAME"
+    if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+        echo "Error: not a git repository"
+        exit 1
+    fi
+    AGENT="${COMMAND//\//-}"
+    BRANCH_NAME="yolo/$AGENT/$(date +%s)"
+    WORKTREE_PATH=".conductor/$AGENT-$(date +%s)"
+    git worktree add -b "$BRANCH_NAME" "$WORKTREE_PATH"
+    cd "$WORKTREE_PATH"
 fi
 
+FLAGS=()
 case "$COMMAND" in
     codex)
-        exec codex --dangerously-bypass-approvals-and-sandbox "$@"
+        FLAGS+=(--dangerously-bypass-approvals-and-sandbox)
         ;;
     claude)
-        exec claude --dangerously-skip-permissions "$@"
+        YOLO_FLAGS_claude=${YOLO_FLAGS_claude:="--dangerously-skip-permissions"}
+        FLAGS+=($YOLO_FLAGS_claude)
         ;;
     copilot)
-        exec copilot --allow-all-tools --allow-all-paths "$@"
+        FLAGS+=(--allow-all-tools --allow-all-paths)
         ;;
     droid)
-        exec droid --skip-permissions-unsafe "$@"
+        FLAGS+=(--skip-permissions-unsafe)
         ;;
     amp)
-        exec amp --dangerously-allow-all "$@"
+        FLAGS+=(--dangerously-allow-all)
         ;;
     cursor-agent)
-        exec cursor-agent --force "$@"
+        FLAGS+=(--force)
+        ;;
+    opencode)
         ;;
     *)
-        exec "$COMMAND" --yolo "$@"
+        FLAGS+=(--yolo)
         ;;
 esac
+
+if [ "$DRY_RUN" = true ]; then
+    echo "$COMMAND" "${FLAGS[@]}" "${ARGS[@]}"
+    exit 0
+fi
+
+exec "$COMMAND" "${FLAGS[@]}" "${ARGS[@]}"
