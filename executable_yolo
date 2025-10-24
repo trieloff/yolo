@@ -95,7 +95,7 @@ AGENT_FLAG_VAR="YOLO_FLAGS_${COMMAND//-/_}"
 AGENT_FLAG_VAR=${AGENT_FLAG_VAR//\//_}
 
 if [ -n "${!AGENT_FLAG_VAR:-}" ]; then
-    FLAGS+=(${!AGENT_FLAG_VAR})
+    read -r -a FLAGS <<< "${!AGENT_FLAG_VAR}"
 else
     case "$COMMAND" in
         codex)
@@ -125,7 +125,7 @@ else
 fi
 
 if [ "${YOLO_DEBUG:-false}" = true ]; then
-    echo "Executing: $COMMAND ${FLAGS[@]} ${ARGS[@]}"
+    echo "Executing: $COMMAND ${FLAGS[*]} ${ARGS[*]}"
 fi
 
 if [ "$DRY_RUN" = true ]; then

@@ -42,6 +42,7 @@ chmod +x mocks/other
 export PATH="$(pwd)/mocks:$PATH"
 
 # Run tests
+output=""
 output=$(./executable_yolo --version)
 if [ "$output" != "0.1.0" ]; then
     echo "Test failed for --version"
@@ -66,7 +67,7 @@ if [ "$output" != "claude --dangerously-skip-permissions test" ]; then
     exit 1
 fi
 
-YOLO_FLAGS_claude="--custom-flag"
+export YOLO_FLAGS_claude="--custom-flag"
 output=$(./executable_yolo claude test)
 if [ "$output" != "claude --custom-flag test" ]; then
     echo "Test failed for YOLO_FLAGS_claude"
@@ -74,7 +75,7 @@ if [ "$output" != "claude --custom-flag test" ]; then
 fi
 unset YOLO_FLAGS_claude
 
-YOLO_FLAGS_cursor_agent="--custom-flag"
+export YOLO_FLAGS_cursor_agent="--custom-flag"
 output=$(./executable_yolo cursor-agent test)
 if [ "$output" != "cursor-agent --custom-flag test" ]; then
     echo "Test failed for YOLO_FLAGS_cursor_agent"
@@ -123,10 +124,12 @@ if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
     git init
 fi
 output=$(./executable_yolo -w other test)
-if [ ! -d ".conductor/other-"* ]; then
-    echo "Test failed for worktree creation"
-    exit 1
-fi
+for d in .conductor/other-*; do
+    if [ ! -d "$d" ]; then
+        echo "Test failed for worktree creation"
+        exit 1
+    fi
+done
 
 if [ "$output" != "other --yolo test" ]; then
     echo "Test failed for worktree command"
