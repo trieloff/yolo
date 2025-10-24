@@ -11,6 +11,7 @@ VERSION="1.0.0"
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
@@ -48,6 +49,7 @@ Supported Commands:
   droid             Factory AI Droid (adds --skip-permissions-unsafe)
   amp               Sourcegraph Amp (adds --dangerously-allow-all)
   cursor-agent      Cursor Agent (adds --force)
+  opencode          OpenCode (no extra flags)
   <other>           Any other command (adds --yolo)
 
 Environment Variables:
@@ -179,6 +181,10 @@ else
         cursor-agent|cursor_agent)
             agent_flags=("--force")
             ;;
+        opencode)
+            # OpenCode doesn't need extra flags
+            agent_flags=()
+            ;;
         *)
             # For all others, add --yolo
             agent_flags=("--yolo")
@@ -193,7 +199,12 @@ if ! command -v "$cmd" >/dev/null 2>&1; then
 fi
 
 # Build complete command array
-full_command=("$cmd" "${agent_flags[@]}" "${rest_args[@]}")
+# Handle empty agent_flags array properly with set -u
+if [ ${#agent_flags[@]} -gt 0 ]; then
+    full_command=("$cmd" "${agent_flags[@]}" "${rest_args[@]}")
+else
+    full_command=("$cmd" "${rest_args[@]}")
+fi
 
 debug_log "Command: ${full_command[*]}"
 
@@ -202,6 +213,10 @@ if [ "$dry_run" = true ]; then
     print_color "$YELLOW" "[DRY RUN] Would execute: ${full_command[*]}"
     exit 0
 else
-    print_color "$GREEN" "Running $cmd with ${agent_flags[*]}"
+    if [ ${#agent_flags[@]} -gt 0 ]; then
+        print_color "$GREEN" "Running $cmd with ${agent_flags[*]}"
+    else
+        print_color "$GREEN" "Running $cmd"
+    fi
     exec "${full_command[@]}"
 fi
