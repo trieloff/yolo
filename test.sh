@@ -114,6 +114,7 @@ test_command_flags() {
         "droid:--skip-permissions-unsafe"
         "amp:--dangerously-allow-all"
         "cursor-agent:--force"
+        "opencode:"  # no extra flags
         "unknown-tool:--yolo"
     )
 
