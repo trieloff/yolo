@@ -50,6 +50,7 @@ Examples:
 Environment Variables:
   YOLO_FLAGS_<agent>  Override flags for a specific agent (e.g., YOLO_FLAGS_claude)
                       Note: hyphens in agent names become underscores (e.g., cursor-agent → YOLO_FLAGS_cursor_agent)
+  YOLO_DEBUG          Print the final command and directory before execution (set to "true")
 
 EOF
 }
@@ -119,8 +120,8 @@ if [ "$use_worktree" = true ]; then
         mkdir -p "$conductor_dir"
     fi
 
-    # Generate branch name based on agent and timestamp
-    timestamp=$(date +%Y%m%d-%H%M%S)
+    # Generate branch name based on agent and timestamp (UTC)
+    timestamp=$(date -u +%Y%m%d-%H%M%S)
     branch_name="yolo/$cmd/$timestamp"
     worktree_path="$conductor_dir/$cmd-$timestamp"
 
@@ -146,6 +147,10 @@ if [ -n "${!env_var:-}" ]; then
         echo "$cmd" ${!env_var} "${rest_args[@]}"
         exit 0
     fi
+    if [ "${YOLO_DEBUG:-false}" = "true" ]; then
+        print_color "$BLUE" "[DEBUG] Command: $cmd ${!env_var} ${rest_args[*]}"
+        print_color "$BLUE" "[DEBUG] Directory: $PWD"
+    fi
     print_color "$GREEN" "Running $cmd with custom flags: ${!env_var}"
     # shellcheck disable=SC2086
     exec "$cmd" ${!env_var} "${rest_args[@]}"
@@ -158,6 +163,10 @@ case "$cmd" in
             echo codex "${flags[@]}" "${rest_args[@]}"
             exit 0
         fi
+        if [ "${YOLO_DEBUG:-false}" = "true" ]; then
+            print_color "$BLUE" "[DEBUG] Command: codex ${flags[*]} ${rest_args[*]}"
+            print_color "$BLUE" "[DEBUG] Directory: $PWD"
+        fi
         print_color "$GREEN" "Running codex with ${flags[*]}"
         exec codex "${flags[@]}" "${rest_args[@]}"
         ;;
@@ -166,6 +175,10 @@ case "$cmd" in
         if [ "$dry_run" = true ]; then
             echo claude "${flags[@]}" "${rest_args[@]}"
             exit 0
+        fi
+        if [ "${YOLO_DEBUG:-false}" = "true" ]; then
+            print_color "$BLUE" "[DEBUG] Command: claude ${flags[*]} ${rest_args[*]}"
+            print_color "$BLUE" "[DEBUG] Directory: $PWD"
         fi
         print_color "$GREEN" "Running claude with ${flags[*]}"
         exec claude "${flags[@]}" "${rest_args[@]}"
@@ -176,6 +189,10 @@ case "$cmd" in
             echo copilot "${flags[@]}" "${rest_args[@]}"
             exit 0
         fi
+        if [ "${YOLO_DEBUG:-false}" = "true" ]; then
+            print_color "$BLUE" "[DEBUG] Command: copilot ${flags[*]} ${rest_args[*]}"
+            print_color "$BLUE" "[DEBUG] Directory: $PWD"
+        fi
         print_color "$GREEN" "Running copilot with ${flags[*]}"
         exec copilot "${flags[@]}" "${rest_args[@]}"
         ;;
@@ -184,6 +201,10 @@ case "$cmd" in
         if [ "$dry_run" = true ]; then
             echo droid "${flags[@]}" "${rest_args[@]}"
             exit 0
+        fi
+        if [ "${YOLO_DEBUG:-false}" = "true" ]; then
+            print_color "$BLUE" "[DEBUG] Command: droid ${flags[*]} ${rest_args[*]}"
+            print_color "$BLUE" "[DEBUG] Directory: $PWD"
         fi
         print_color "$GREEN" "Running droid with ${flags[*]}"
         exec droid "${flags[@]}" "${rest_args[@]}"
@@ -194,6 +215,10 @@ case "$cmd" in
             echo amp "${flags[@]}" "${rest_args[@]}"
             exit 0
         fi
+        if [ "${YOLO_DEBUG:-false}" = "true" ]; then
+            print_color "$BLUE" "[DEBUG] Command: amp ${flags[*]} ${rest_args[*]}"
+            print_color "$BLUE" "[DEBUG] Directory: $PWD"
+        fi
         print_color "$GREEN" "Running amp with ${flags[*]}"
         exec amp "${flags[@]}" "${rest_args[@]}"
         ;;
@@ -203,6 +228,10 @@ case "$cmd" in
             echo cursor-agent "${flags[@]}" "${rest_args[@]}"
             exit 0
         fi
+        if [ "${YOLO_DEBUG:-false}" = "true" ]; then
+            print_color "$BLUE" "[DEBUG] Command: cursor-agent ${flags[*]} ${rest_args[*]}"
+            print_color "$BLUE" "[DEBUG] Directory: $PWD"
+        fi
         print_color "$GREEN" "Running cursor-agent with ${flags[*]}"
         exec cursor-agent "${flags[@]}" "${rest_args[@]}"
         ;;
@@ -210,6 +239,10 @@ case "$cmd" in
         if [ "$dry_run" = true ]; then
             echo opencode "${rest_args[@]}"
             exit 0
+        fi
+        if [ "${YOLO_DEBUG:-false}" = "true" ]; then
+            print_color "$BLUE" "[DEBUG] Command: opencode ${rest_args[*]}"
+            print_color "$BLUE" "[DEBUG] Directory: $PWD"
         fi
         print_color "$GREEN" "Running opencode (no additional flags needed)"
         exec opencode "${rest_args[@]}"
@@ -224,6 +257,10 @@ case "$cmd" in
         if [ "$dry_run" = true ]; then
             echo "$cmd" "${flags[@]}" "${rest_args[@]}"
             exit 0
+        fi
+        if [ "${YOLO_DEBUG:-false}" = "true" ]; then
+            print_color "$BLUE" "[DEBUG] Command: $cmd ${flags[*]} ${rest_args[*]}"
+            print_color "$BLUE" "[DEBUG] Directory: $PWD"
         fi
         print_color "$GREEN" "Running $cmd with ${flags[*]}"
         exec "$cmd" "${flags[@]}" "${rest_args[@]}"

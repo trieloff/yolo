@@ -179,6 +179,12 @@ yolo droid "refactor code"
 # For agents with hyphens, use underscores
 export YOLO_FLAGS_cursor_agent="--my-flags"
 yolo cursor-agent "test"
+
+# Enable debug output
+export YOLO_DEBUG=true
+yolo claude "test"
+# Shows: [DEBUG] Command: claude --dangerously-skip-permissions test
+#        [DEBUG] Directory: /path/to/working/dir
 ```
 
 The pattern is `YOLO_FLAGS_<agent>` where `<agent>` is the command name with hyphens converted to underscores.
