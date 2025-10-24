@@ -38,6 +38,7 @@ Supported Commands:
   droid             Factory AI Droid (adds --skip-permissions-unsafe)
   amp               Sourcegraph Amp (adds --dangerously-allow-all)
   cursor-agent      Cursor Agent (adds --force)
+  opencode          OpenCode (no additional flags)
   <other>           Any other command (adds --yolo)
 
 Examples:
@@ -139,6 +140,10 @@ case "$cmd" in
     cursor-agent)
         print_color "$GREEN" "Running cursor-agent with --force"
         exec cursor-agent --force "${rest_args[@]}"
+        ;;
+    opencode)
+        print_color "$GREEN" "Running opencode (no additional flags needed)"
+        exec opencode "${rest_args[@]}"
         ;;
     *)
         # For all others, check if command exists and add --yolo

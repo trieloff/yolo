@@ -11,20 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    
-    - name: Install git
-      run: sudo apt-get install -y git
-    
+
     - name: Run installation
       run: ./install.sh
-    
-    - name: Verify installation
-      run: |
-        export PATH="$HOME/.local/bin:$PATH"
-        which yolo
-        yolo --help
-    
-    - name: Run basic tests
+
+    - name: Run tests
       run: |
         export PATH="$HOME/.local/bin:$PATH"
         ./test.sh

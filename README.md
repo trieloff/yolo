@@ -109,6 +109,7 @@ yolo my-custom-agent "do something"
 | Droid (Factory AI) | `--skip-permissions-unsafe` | `yolo droid` |
 | Amp (Sourcegraph) | `--dangerously-allow-all` | `yolo amp` |
 | Cursor Agent | `--force` | `yolo cursor-agent` |
+| OpenCode | No additional flags | `yolo opencode` |
 | Other | `--yolo` | `yolo <command>` |
 
 ## 🌳 Git Worktree Feature

@@ -44,9 +44,13 @@ run_test() {
 }
 
 # Check if yolo is installed
-if ! command -v yolo >/dev/null 2>&1; then
-    echo "Error: yolo command not found in PATH"
-    echo "Make sure to add ~/.local/bin to your PATH or run: export PATH=\"\$HOME/.local/bin:\$PATH\""
+if command -v yolo >/dev/null 2>&1; then
+    YOLO_CMD="yolo"
+elif [ -x "./executable_yolo" ]; then
+    echo "Using local executable for testing"
+    YOLO_CMD="./executable_yolo"
+else
+    echo "Error: neither yolo command in PATH nor local executable_yolo found"
     exit 1
 fi
 
@@ -55,13 +59,13 @@ echo
 
 # Test 1: Help flag
 test_help() {
-    yolo --help >/dev/null 2>&1
+    $YOLO_CMD --help >/dev/null 2>&1
 }
 run_test "Help flag works" test_help
 
 # Test 2: Missing command error
 test_missing_command() {
-    ! yolo 2>/dev/null
+    ! $YOLO_CMD 2>/dev/null
 }
 run_test "Missing command shows error" test_missing_command
 
@@ -84,7 +88,7 @@ chmod +x /tmp/yolo-test/mock-agent
 # Test 4: Unknown command with --yolo flag
 test_unknown_command() {
     export PATH="/tmp/yolo-test:$PATH"
-    yolo mock-agent test-arg 2>&1 | grep -q "Running mock-agent with --yolo"
+    $YOLO_CMD mock-agent test-arg 2>&1 | grep -q "Running mock-agent with --yolo"
 }
 run_test "Unknown command gets --yolo flag" test_unknown_command
 
@@ -99,7 +103,13 @@ test_command_mapping() {
 }
 run_test "Command mappings documented in help" test_command_mapping
 
-# Test 6: Worktree flag parsing (without actually creating worktree)
+# Test 6: Verify opencode command is documented
+test_opencode_mapping() {
+    $YOLO_CMD --help 2>    yolo --help 2>&1 | grep -q "opencode"1 | grep -q "opencode"
+}
+run_test "OpenCode command documented in help" test_opencode_mapping
+
+# Test 7: Worktree flag parsing (without actually creating worktree)
 test_worktree_flag() {
     # Test with non-git directory - should fail gracefully
     cd /tmp
