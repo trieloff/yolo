@@ -38,6 +38,26 @@ yolo -w droid "Rewrite the frontend in a more obscure framework"
 yolo --help
 ```
 
+### Environment Variables
+
+- `YOLO_DEBUG=true`: Print the final command before executing it.
+- `YOLO_FLAGS_<agent>`: Override the default flags for a specific agent. For example, `YOLO_FLAGS_claude="--custom-flag"`.
+
+### Worktree Cleanup
+
+When you are done with a worktree, you can clean it up with the following commands:
+
+```bash
+# Remove the worktree directory
+git worktree remove .conductor/<agent>-<timestamp>
+
+# Prune the worktree
+git worktree prune
+
+# Delete the branch
+git branch -d yolo/<agent>/<timestamp>
+```
+
 ## 🌍 SUPPORTED AI TOOLS
 
 - `codex`
@@ -46,6 +66,7 @@ yolo --help
 - `droid`
 - `amp`
 - `cursor-agent`
+- `opencode`
 - ...and any other tool that needs a little encouragement to break the rules.
 
 ## 🔗 The Vibe Coding Ecosystem

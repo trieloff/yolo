@@ -77,40 +77,56 @@ if [ "$WORKTREE" = true ]; then
         echo "Error: not a git repository"
         exit 1
     fi
+    REPO_ROOT=$(git rev-parse --show-toplevel)
     AGENT="${COMMAND//\//-}"
-    BRANCH_NAME="yolo/$AGENT/$(date +%s)"
-    WORKTREE_PATH=".conductor/$AGENT-$(date +%s)"
-    git worktree add -b "$BRANCH_NAME" "$WORKTREE_PATH"
-    cd "$WORKTREE_PATH"
+    TIMESTAMP=$(date -u +%Y%m%d-%H%M%S)
+    BRANCH_NAME="yolo/$AGENT/$TIMESTAMP"
+    WORKTREE_PATH=".conductor/$AGENT-$TIMESTAMP"
+    git -C "$REPO_ROOT" worktree add -b "$BRANCH_NAME" "$WORKTREE_PATH"
+    cd "$REPO_ROOT/$WORKTREE_PATH"
+fi
+
+if ! command -v "$COMMAND" >/dev/null 2>&1; then
+    echo "Warning: command not found: $COMMAND"
 fi
 
 FLAGS=()
-case "$COMMAND" in
-    codex)
-        FLAGS+=(--dangerously-bypass-approvals-and-sandbox)
-        ;;
-    claude)
-        YOLO_FLAGS_claude=${YOLO_FLAGS_claude:-"--dangerously-skip-permissions"}
-        FLAGS+=("$YOLO_FLAGS_claude")
-        ;;
-    copilot)
-        FLAGS+=(--allow-all-tools --allow-all-paths)
-        ;;
-    droid)
-        FLAGS+=(--skip-permissions-unsafe)
-        ;;
-    amp)
-        FLAGS+=(--dangerously-allow-all)
-        ;;
-    cursor-agent)
-        FLAGS+=(--force)
-        ;;
-    opencode)
-        ;;
-    *)
-        FLAGS+=(--yolo)
-        ;;
-esac
+AGENT_FLAG_VAR="YOLO_FLAGS_${COMMAND//-/_}"
+AGENT_FLAG_VAR=${AGENT_FLAG_VAR//\//_}
+
+if [ -n "${!AGENT_FLAG_VAR:-}" ]; then
+    FLAGS+=(${!AGENT_FLAG_VAR})
+else
+    case "$COMMAND" in
+        codex)
+            FLAGS+=(--dangerously-bypass-approvals-and-sandbox)
+            ;;
+        claude)
+            FLAGS+=(--dangerously-skip-permissions)
+            ;;
+        copilot)
+            FLAGS+=(--allow-all-tools --allow-all-paths)
+            ;;
+        droid)
+            FLAGS+=(--skip-permissions-unsafe)
+            ;;
+        amp)
+            FLAGS+=(--dangerously-allow-all)
+            ;;
+        cursor-agent)
+            FLAGS+=(--force)
+            ;;
+        opencode)
+            ;;
+        *)
+            FLAGS+=(--yolo)
+            ;;
+    esac
+fi
+
+if [ "${YOLO_DEBUG:-false}" = true ]; then
+    echo "Executing: $COMMAND ${FLAGS[@]} ${ARGS[@]}"
+fi
 
 if [ "$DRY_RUN" = true ]; then
     echo "$COMMAND" "${FLAGS[@]}" "${ARGS[@]}"

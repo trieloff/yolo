@@ -74,6 +74,14 @@ if [ "$output" != "claude --custom-flag test" ]; then
 fi
 unset YOLO_FLAGS_claude
 
+YOLO_FLAGS_cursor_agent="--custom-flag"
+output=$(./executable_yolo cursor-agent test)
+if [ "$output" != "cursor-agent --custom-flag test" ]; then
+    echo "Test failed for YOLO_FLAGS_cursor_agent"
+    exit 1
+fi
+unset YOLO_FLAGS_cursor_agent
+
 output=$(./executable_yolo copilot test)
 if [ "$output" != "copilot --allow-all-tools --allow-all-paths test" ]; then
     echo "Test failed for copilot"
@@ -111,7 +119,7 @@ if [ "$output" != "other --yolo test" ]; then
 fi
 
 # Test worktree
-if git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
     git init
 fi
 output=$(./executable_yolo -w other test)
@@ -125,5 +133,18 @@ if [ "$output" != "other --yolo test" ]; then
     exit 1
 fi
 
+# Test command not found
+output=$(./executable_yolo notfound 2>&1)
+if [[ "$output" != *"Warning: command not found: notfound"* ]]; then
+    echo "Test failed for command not found"
+    exit 1
+fi
+
+# Test YOLO_DEBUG
+output=$(YOLO_DEBUG=true ./executable_yolo other test 2>&1)
+if [[ "$output" != *"Executing: other --yolo test"* ]]; then
+    echo "Test failed for YOLO_DEBUG"
+    exit 1
+fi
 
 echo "All tests passed"
