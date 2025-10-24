@@ -1,0 +1,316 @@
+#!/usr/bin/env bash
+
+# YOLO - AI CLI Tool Wrapper with Worktree Support
+# Automatically adds bypass/danger flags to AI CLI tools and optionally
+# creates isolated git worktrees for agent sessions.
+#
+# Part of the AI-Aligned toolchain:
+# - ai-aligned-git: Git wrapper for safe AI commit practices
+# - ai-aligned-gh: GitHub CLI wrapper for proper AI attribution
+# - ai-aligned-yolo: AI CLI launcher with worktree isolation
+#
+# Copyright 2025 Lars Trieloff
+# Licensed under the Apache License, Version 2.0
+
+set -euo pipefail
+
+VERSION="1.0.0"
+
+# Color output helpers
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Enable colored output if stdout is a terminal
+if [[ -t 1 ]]; then
+    USE_COLOR=true
+else
+    USE_COLOR=false
+fi
+
+print_error() {
+    if [[ "$USE_COLOR" == "true" ]]; then
+        echo -e "${RED}yolo: $*${NC}" >&2
+    else
+        echo "yolo: $*" >&2
+    fi
+}
+
+print_warning() {
+    if [[ "$USE_COLOR" == "true" ]]; then
+        echo -e "${YELLOW}yolo: $*${NC}" >&2
+    else
+        echo "yolo: $*" >&2
+    fi
+}
+
+print_info() {
+    if [[ "$USE_COLOR" == "true" ]]; then
+        echo -e "${BLUE}$*${NC}" >&2
+    else
+        echo "$*" >&2
+    fi
+}
+
+print_success() {
+    if [[ "$USE_COLOR" == "true" ]]; then
+        echo -e "${GREEN}$*${NC}" >&2
+    else
+        echo "$*" >&2
+    fi
+}
+
+# Show usage information
+show_usage() {
+    cat << EOF
+YOLO - AI CLI Tool Wrapper with Worktree Support
+
+Usage: yolo [OPTIONS] <command> [args...]
+
+Options:
+  -w, --worktree    Create a git worktree in .conductor/ before running command
+  -n, --dry-run     Show what would be executed without running it
+  -h, --help        Show this help message
+  -v, --version     Show version information
+
+Supported Commands:
+  codex             Adds --dangerously-bypass-approvals-and-sandbox
+  claude            Adds --dangerously-skip-permissions
+  copilot           Adds --allow-all-tools --allow-all-paths
+  droid             Adds --skip-permissions-unsafe
+  amp               Adds --dangerously-allow-all
+  cursor-agent      Adds --force
+  opencode          No extra flags added
+  <other>           Adds --yolo (generic fallback)
+
+Examples:
+  yolo claude                    # Run claude with --dangerously-skip-permissions
+  yolo -w claude "fix the bug"   # Create worktree, then run claude
+  yolo copilot chat              # Run copilot chat with safety flags disabled
+
+Worktree Mode:
+  When using -w/--worktree flag:
+  - Creates .conductor/ directory in repository root
+  - Creates branch: yolo/<command>/<timestamp>
+  - Creates worktree: .conductor/<command>-<timestamp>
+  - Changes to worktree directory before running command
+
+Part of the AI-Aligned toolchain. See:
+  https://github.com/trieloff/ai-aligned-git
+  https://github.com/trieloff/ai-aligned-gh
+
+EOF
+}
+
+show_version() {
+    echo "yolo version $VERSION"
+}
+
+# Check if we're in a git repository
+is_git_repo() {
+    git rev-parse --git-dir >/dev/null 2>&1
+}
+
+# Get the repository root directory
+get_repo_root() {
+    git rev-parse --show-toplevel 2>/dev/null || echo "$PWD"
+}
+
+# Create a git worktree for the command
+create_worktree() {
+    local command_name="$1"
+
+    if ! is_git_repo; then
+        print_error "not in a git repository, cannot create worktree"
+        return 1
+    fi
+
+    local repo_root
+    repo_root="$(get_repo_root)"
+
+    local conductor_dir="$repo_root/.conductor"
+    if [[ ! -d "$conductor_dir" ]]; then
+        mkdir -p "$conductor_dir"
+        print_info "Created .conductor directory"
+    fi
+
+    # Generate branch name and worktree path with timestamp
+    local timestamp
+    timestamp="$(date +%Y%m%d-%H%M%S)"
+    local branch_name="yolo/$command_name/$timestamp"
+    local worktree_path="$conductor_dir/$command_name-$timestamp"
+
+    print_info "Creating worktree at $worktree_path with branch $branch_name"
+
+    # Create the worktree
+    if ! git worktree add -b "$branch_name" "$worktree_path" 2>&1; then
+        print_error "failed to create worktree"
+        return 1
+    fi
+
+    print_success "Worktree created successfully"
+    print_info "Switching to worktree..."
+
+    # Change to the worktree directory
+    cd "$worktree_path" || {
+        print_error "failed to change to worktree directory"
+        return 1
+    }
+
+    print_success "Now in: $worktree_path"
+    return 0
+}
+
+# Get the appropriate flags for a command
+get_command_flags() {
+    local cmd="$1"
+
+    # Check for environment-based flag override
+    # e.g., YOLO_FLAGS_claude="--custom-flag"
+    # Note: hyphens in command names are converted to underscores for env var
+    local env_var_name="${cmd//-/_}"
+    local env_var="YOLO_FLAGS_${env_var_name}"
+    if [[ -n "${!env_var:-}" ]]; then
+        echo "${!env_var}"
+        return
+    fi
+
+    # Default flags based on command
+    case "$cmd" in
+        codex)
+            echo "--dangerously-bypass-approvals-and-sandbox"
+            ;;
+        claude)
+            echo "--dangerously-skip-permissions"
+            ;;
+        copilot)
+            echo "--allow-all-tools --allow-all-paths"
+            ;;
+        droid)
+            echo "--skip-permissions-unsafe"
+            ;;
+        amp)
+            echo "--dangerously-allow-all"
+            ;;
+        cursor-agent)
+            echo "--force"
+            ;;
+        opencode)
+            # opencode doesn't need extra flags
+            echo ""
+            ;;
+        *)
+            echo "--yolo"
+            ;;
+    esac
+}
+
+# Check if a command exists in PATH
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+# Main function
+main() {
+    local use_worktree=false
+    local dry_run=false
+    local command_name=""
+    local command_args=()
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -h|--help)
+                show_usage
+                exit 0
+                ;;
+            -v|--version)
+                show_version
+                exit 0
+                ;;
+            -w|--worktree)
+                use_worktree=true
+                shift
+                ;;
+            -n|--dry-run)
+                dry_run=true
+                shift
+                ;;
+            -*)
+                print_error "unknown option: $1"
+                echo ""
+                show_usage
+                exit 1
+                ;;
+            *)
+                # First non-option argument is the command
+                if [[ -z "$command_name" ]]; then
+                    command_name="$1"
+                    shift
+                    # All remaining arguments are passed to the command
+                    command_args=("$@")
+                    break
+                fi
+                ;;
+        esac
+    done
+
+    # Check if command was provided
+    if [[ -z "$command_name" ]]; then
+        print_error "missing command argument"
+        echo ""
+        show_usage
+        exit 1
+    fi
+
+    # Check if command exists
+    if ! command_exists "$command_name"; then
+        print_warning "command '$command_name' not found in PATH"
+        print_info "Will attempt to run it anyway..."
+    fi
+
+    # Create worktree if requested
+    if [[ "$use_worktree" == "true" ]]; then
+        if ! create_worktree "$command_name"; then
+            exit 1
+        fi
+    fi
+
+    # Get the appropriate flags for this command
+    local flags
+    flags="$(get_command_flags "$command_name")"
+
+    # Build the final command by properly splitting flags into array
+    local full_command
+    full_command=("$command_name")
+
+    # Add flags if any (intentionally unquoted to allow word splitting)
+    if [[ -n "$flags" ]]; then
+        # shellcheck disable=SC2206
+        local flag_array=($flags)
+        full_command+=("${flag_array[@]}")
+    fi
+
+    # Add remaining arguments
+    full_command+=("${command_args[@]}")
+
+    # Dry-run mode: show what would be executed without running
+    if [[ "$dry_run" == "true" ]]; then
+        print_info "Dry-run mode - would execute:"
+        echo "${full_command[*]}"
+        exit 0
+    fi
+
+    # Print what we're about to execute (for transparency)
+    if [[ "${YOLO_DEBUG:-false}" == "true" ]]; then
+        print_info "Executing: ${full_command[*]}"
+    fi
+
+    # Execute the command
+    exec "${full_command[@]}"
+}
+
+# Run main function
+main "$@"
