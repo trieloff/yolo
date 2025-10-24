@@ -71,6 +71,8 @@ Usage: yolo [OPTIONS] <command> [args...]
 
 Options:
   -w, --worktree    Create a git worktree in .conductor/ before running command
+  -c, --clean       Automatically clean up worktree after command completes
+  -nc, --no-clean   Preserve worktree after command completes (no prompt)
   -n, --dry-run     Show what would be executed without running it
   -h, --help        Show this help message
   -v, --version     Show version information
@@ -86,15 +88,17 @@ Supported Commands:
   <other>           Adds --yolo (generic fallback)
 
 Examples:
-  yolo claude                    # Run claude with --dangerously-skip-permissions
-  yolo -w claude "fix the bug"   # Create worktree, then run claude
-  yolo copilot chat              # Run copilot chat with safety flags disabled
+  yolo claude                      # Run claude with --dangerously-skip-permissions
+  yolo -w claude "fix the bug"     # Create worktree, then run claude (prompt for cleanup)
+  yolo -w -c claude "experiment"   # Create worktree, auto-cleanup after
+  yolo -w -nc claude "keep this"   # Create worktree, preserve it after
+  yolo copilot chat                # Run copilot chat with safety flags disabled
 
 Worktree Mode:
   When using -w/--worktree flag:
   - Creates .conductor/ directory in repository root
-  - Creates branch: yolo/<command>/<timestamp>
-  - Creates worktree: .conductor/<command>-<timestamp>
+  - Creates branch: <command>-N (where N is the lowest available number)
+  - Creates worktree: .conductor/<command>-N
   - Changes to worktree directory before running command
 
 Part of the AI-Aligned toolchain. See:
@@ -119,6 +123,7 @@ get_repo_root() {
 }
 
 # Create a git worktree for the command
+# Sets global variables: YOLO_BRANCH_NAME, YOLO_WORKTREE_PATH, YOLO_REPO_ROOT
 create_worktree() {
     local command_name="$1"
 
@@ -127,25 +132,28 @@ create_worktree() {
         return 1
     fi
 
-    local repo_root
-    repo_root="$(get_repo_root)"
+    YOLO_REPO_ROOT="$(get_repo_root)"
 
-    local conductor_dir="$repo_root/.conductor"
+    local conductor_dir="$YOLO_REPO_ROOT/.conductor"
     if [[ ! -d "$conductor_dir" ]]; then
         mkdir -p "$conductor_dir"
         print_info "Created .conductor directory"
     fi
 
-    # Generate branch name and worktree path with timestamp
-    local timestamp
-    timestamp="$(date +%Y%m%d-%H%M%S)"
-    local branch_name="yolo/$command_name/$timestamp"
-    local worktree_path="$conductor_dir/$command_name-$timestamp"
+    # Find the lowest available number for this agent
+    local agent_number=1
+    while git rev-parse --verify "$command_name-$agent_number" >/dev/null 2>&1 || \
+          [[ -d "$conductor_dir/$command_name-$agent_number" ]]; do
+        ((agent_number++))
+    done
 
-    print_info "Creating worktree at $worktree_path with branch $branch_name"
+    YOLO_BRANCH_NAME="$command_name-$agent_number"
+    YOLO_WORKTREE_PATH="$conductor_dir/$command_name-$agent_number"
+
+    print_info "Creating worktree at $YOLO_WORKTREE_PATH with branch $YOLO_BRANCH_NAME"
 
     # Create the worktree
-    if ! git worktree add -b "$branch_name" "$worktree_path" 2>&1; then
+    if ! git worktree add -b "$YOLO_BRANCH_NAME" "$YOLO_WORKTREE_PATH" 2>&1; then
         print_error "failed to create worktree"
         return 1
     fi
@@ -154,12 +162,12 @@ create_worktree() {
     print_info "Switching to worktree..."
 
     # Change to the worktree directory
-    cd "$worktree_path" || {
+    cd "$YOLO_WORKTREE_PATH" || {
         print_error "failed to change to worktree directory"
         return 1
     }
 
-    print_success "Now in: $worktree_path"
+    print_success "Now in: $YOLO_WORKTREE_PATH"
     return 0
 }
 
@@ -212,10 +220,65 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Clean up worktree and branch
+cleanup_worktree() {
+    local branch_name="$1"
+    local worktree_path="$2"
+    local repo_root="$3"
+
+    print_info "Cleaning up worktree..."
+
+    # Go back to repository root
+    cd "$repo_root" || {
+        print_error "failed to return to repository root"
+        return 1
+    }
+
+    # Remove the worktree
+    if git worktree remove "$worktree_path" 2>/dev/null; then
+        print_success "Removed worktree: $worktree_path"
+    else
+        print_warning "Failed to remove worktree (may need manual cleanup)"
+    fi
+
+    # Delete the branch
+    if git branch -D "$branch_name" >/dev/null 2>&1; then
+        print_success "Deleted branch: $branch_name"
+    else
+        print_warning "Failed to delete branch (may need manual cleanup)"
+    fi
+
+    return 0
+}
+
+# Prompt user for cleanup
+prompt_cleanup() {
+    local branch_name="$1"
+    local worktree_path="$2"
+    local repo_root="$3"
+
+    echo ""
+    print_info "Worktree session completed."
+    read -r -p "Clean up worktree and branch? (y/n): " response
+
+    case "$response" in
+        [yY]|[yY][eE][sS])
+            cleanup_worktree "$branch_name" "$worktree_path" "$repo_root"
+            ;;
+        *)
+            print_info "Worktree preserved at: $worktree_path"
+            print_info "To clean up later, run:"
+            echo "  git worktree remove $worktree_path"
+            echo "  git branch -D $branch_name"
+            ;;
+    esac
+}
+
 # Main function
 main() {
     local use_worktree=false
     local dry_run=false
+    local auto_clean=""
     local command_name=""
     local command_args=()
 
@@ -232,6 +295,14 @@ main() {
                 ;;
             -w|--worktree)
                 use_worktree=true
+                shift
+                ;;
+            -c|--clean)
+                auto_clean="yes"
+                shift
+                ;;
+            -nc|--no-clean)
+                auto_clean="no"
                 shift
                 ;;
             -n|--dry-run)
@@ -276,6 +347,7 @@ main() {
         if ! create_worktree "$command_name"; then
             exit 1
         fi
+        # create_worktree sets YOLO_BRANCH_NAME, YOLO_WORKTREE_PATH, YOLO_REPO_ROOT
     fi
 
     # Get the appropriate flags for this command
@@ -308,8 +380,25 @@ main() {
         print_info "Executing: ${full_command[*]}"
     fi
 
-    # Execute the command
-    exec "${full_command[@]}"
+    # Execute the command (not using exec so we can cleanup after)
+    "${full_command[@]}"
+    local exit_code=$?
+
+    # Handle cleanup if worktree was created
+    if [[ "$use_worktree" == "true" && -n "$YOLO_BRANCH_NAME" ]]; then
+        if [[ "$auto_clean" == "yes" ]]; then
+            # Automatic cleanup
+            cleanup_worktree "$YOLO_BRANCH_NAME" "$YOLO_WORKTREE_PATH" "$YOLO_REPO_ROOT"
+        elif [[ "$auto_clean" == "no" ]]; then
+            # No cleanup, just inform
+            print_info "Worktree preserved at: $YOLO_WORKTREE_PATH"
+        else
+            # Prompt user
+            prompt_cleanup "$YOLO_BRANCH_NAME" "$YOLO_WORKTREE_PATH" "$YOLO_REPO_ROOT"
+        fi
+    fi
+
+    exit $exit_code
 }
 
 # Run main function
