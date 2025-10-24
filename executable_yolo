@@ -260,10 +260,17 @@ main() {
     local flags
     flags="$(get_command_flags "$command_name")"
 
-    # Build the final command
-    # Note: We intentionally don't quote $flags to allow word splitting
-    # shellcheck disable=SC2086
-    local full_command=("$command_name" $flags "${command_args[@]}")
+    # Build the final command by properly splitting flags into array
+    local full_command
+    full_command=("$command_name")
+
+    # Add flags (intentionally unquoted to allow word splitting)
+    # shellcheck disable=SC2206
+    local flag_array=($flags)
+    full_command+=("${flag_array[@]}")
+
+    # Add remaining arguments
+    full_command+=("${command_args[@]}")
 
     # Print what we're about to execute (for transparency)
     if [[ "${YOLO_DEBUG:-false}" == "true" ]]; then

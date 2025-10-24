@@ -241,18 +241,19 @@ test_argument_preservation() {
     run_test
 
     # Create a test command that prints all arguments
-    local test_cmd="/tmp/test_yolo_args"
+    local test_cmd="/tmp/yolo_test_myecho"
     cat > "$test_cmd" << 'EOF'
 #!/bin/bash
 for arg in "$@"; do
     echo "ARG: $arg"
 done
+exit 0
 EOF
     chmod +x "$test_cmd"
 
-    # Run yolo with multiple arguments
+    # Run yolo with multiple arguments (skip --yolo flag since command doesn't support it)
     local output
-    if output=$(PATH="/tmp:$PATH" "$YOLO_CMD" test "arg1" "arg with spaces" "arg3" 2>&1); then
+    if output=$(PATH="/tmp:$PATH" "$YOLO_CMD" yolo_test_myecho "arg1" "arg with spaces" "arg3" 2>&1); then
         if echo "$output" | grep -q "ARG: arg1" && \
            echo "$output" | grep -q "ARG: arg with spaces" && \
            echo "$output" | grep -q "ARG: arg3"; then
@@ -261,7 +262,7 @@ EOF
             print_fail "Command arguments not preserved (got: $output)"
         fi
     else
-        print_fail "yolo test command failed"
+        print_fail "yolo command execution failed"
     fi
 
     # Cleanup
