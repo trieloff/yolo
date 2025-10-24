@@ -1,0 +1,33 @@
+name: Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install git
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y git
+
+    - name: Run installer
+      run: |
+        chmod +x install.sh
+        ./install.sh
+
+    - name: Make test executable
+      run: chmod +x test.sh
+
+    - name: Run tests
+      run: |
+        export PATH="$HOME/.local/bin:$PATH"
+        ./test.sh
