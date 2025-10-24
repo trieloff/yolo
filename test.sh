@@ -42,14 +42,14 @@ run_test() {
     fi
 }
 
-# Check if yolo is installed
-if command -v yolo >/dev/null 2>&1; then
-    YOLO_CMD="yolo"
-elif [ -x "./executable_yolo" ]; then
+# Use local executable for testing (more reliable in CI)
+if [ -x "./executable_yolo" ]; then
     echo "Using local executable for testing"
     YOLO_CMD="./executable_yolo"
+elif command -v yolo >/dev/null 2>&1; then
+    YOLO_CMD="yolo"
 else
-    echo "Error: neither yolo command in PATH nor local executable_yolo found"
+    echo "Error: executable_yolo not found and yolo command not in PATH"
     exit 1
 fi
 

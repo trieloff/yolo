@@ -9,6 +9,8 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      PATH: /home/runner/.local/bin:${{ env.PATH }}
     steps:
     - uses: actions/checkout@v4
 
@@ -16,6 +18,4 @@ jobs:
       run: ./install.sh
 
     - name: Run tests
-      run: |
-        export PATH="$HOME/.local/bin:$PATH"
-        ./test.sh
+      run: ./test.sh
