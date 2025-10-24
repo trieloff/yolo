@@ -12,7 +12,7 @@ readonly VERSION="1.0.0"
 # Show usage information
 usage() {
     cat <<EOF
-Usage: $PROG [-w|--worktree] [--dry-run] <agent> <command> [args...]
+Usage: $PROG [-w|--worktree] [--dry-run] <agent> [args...]
 
 Run AI coding agents with appropriate bypass flags.
 
@@ -32,9 +32,9 @@ Agents:
   *                   - Any other agent runs with --yolo
 
 Examples:
-  $PROG claude gh pr create --title "Fix bug"
-  $PROG -w amp edit src/main.js
-  $PROG --dry-run codex make build
+  $PROG claude "fix the authentication bug"
+  $PROG -w amp "edit src/main.js"
+  $PROG --dry-run codex "make build"
 
 Environment Variables:
   YOLO_FLAGS_<agent>  - Override flags for a specific agent (e.g., YOLO_FLAGS_claude)
@@ -45,7 +45,7 @@ Worktree Mode:
   with branch:
     yolo/<agent>/<timestamp>
   
-  The command runs in the worktree directory. Use this to isolate AI changes.
+  The agent command runs in the worktree directory. Use this to isolate AI changes.
 
 EOF
 }
@@ -164,7 +164,6 @@ main() {
     local use_worktree=0
     local dry_run=0
     local agent=""
-    local cmd=""
     
     # Parse options
     while [ $# -gt 0 ]; do
@@ -199,16 +198,14 @@ main() {
         esac
     done
     
-    # Require at least agent and command
-    if [ $# -lt 2 ]; then
+    # Require at least agent
+    if [ $# -lt 1 ]; then
         usage
-        die "Missing required arguments: <agent> <command>"
+        die "Missing required argument: <agent>"
     fi
     
-    # Extract agent and command
+    # Extract agent (which is also the command to run)
     agent="$1"
-    shift
-    cmd="$1"
     shift
     
     # Get flags for this agent
@@ -230,19 +227,19 @@ main() {
         fi
         info "[dry-run] Would execute in $run_dir:"
         # shellcheck disable=SC2145
-        info "  $cmd $@ $flags"
+        info "  $agent $flags $@"
         exit 0
     fi
     
-    # Execute the command in the target directory
+    # Execute the agent in the target directory
     # Use a subshell to avoid polluting current directory
     (
         cd "$run_dir" || exit 1
         
-        # Execute the command with agent-specific flags
+        # Execute the agent with its flags and any additional arguments
         # Word splitting is intentional for flags
         # shellcheck disable=SC2086
-        exec "$cmd" "$@" $flags
+        exec "$agent" $flags "$@"
     )
 }
 

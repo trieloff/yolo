@@ -42,13 +42,13 @@ The installer puts `yolo` in `~/.local/bin` and adds it to your PATH.
 
 ```bash
 # Run Claude with proper bypass flags
-yolo claude gh pr create --title "New feature"
+yolo claude "create a PR for the new authentication feature"
 
 # Run Amp with its flags
-yolo amp edit src/main.js
+yolo amp "edit src/main.js to add error handling"
 
 # Run any agent in an isolated git worktree
-yolo -w claude make changes
+yolo -w claude "refactor the user service"
 ```
 
 ## 📖 How It Works
@@ -84,48 +84,58 @@ This keeps AI experiments isolated from your main branch.
 
 ```bash
 # Run Claude to create a PR
-yolo claude gh pr create --title "Fix bug" --body "..."
+yolo claude "create a PR to fix the authentication bug"
 
 # Run Amp to edit files  
-yolo amp vim src/app.js
+yolo amp "edit src/app.js to add logging"
 
-# Run Copilot with custom script
-yolo copilot ./scripts/deploy.sh
+# Run Copilot with a deployment request
+yolo copilot "deploy to staging"
 ```
 
 ### Worktree Mode
 
 ```bash
 # Create isolated worktree for Claude
-yolo -w claude make build
+yolo -w claude "refactor the database layer"
 
 # The worktree is at:
 #   .conductor/claude-20241024-184358/
 # On branch:
 #   yolo/claude/20241024-184358
 
-# After inspection, merge or delete:
+# After reviewing changes, you can:
+# 1. Merge the changes if you're happy with them:
+cd .conductor/claude-20241024-184358
+git add .
+git commit -m "Refactor database layer"
+git checkout main
+git merge yolo/claude/20241024-184358
 git worktree remove .conductor/claude-20241024-184358
 git branch -d yolo/claude/20241024-184358
+
+# 2. Or discard the worktree if you don't want the changes:
+git worktree remove --force .conductor/claude-20241024-184358
+git branch -D yolo/claude/20241024-184358
 ```
 
 ### Dry Run Mode
 
 ```bash
 # See what would be executed without running it
-yolo --dry-run claude echo "test"
+yolo --dry-run claude "create tests"
 # Output:
 # yolo: [dry-run] Would execute in .:
-#   echo test --dangerously-skip-permissions
+#   claude --dangerously-skip-permissions create tests
 
 # With worktree:
-yolo -w --dry-run amp make build
+yolo -w --dry-run amp "build the project"
 # Output:
 # yolo: Creating worktree at .conductor/amp-20241024-184501 with branch yolo/amp/20241024-184501
 # yolo: [dry-run] Branch: yolo/amp/20241024-184501
 # yolo: [dry-run] Worktree: .conductor/amp-20241024-184501
 # yolo: [dry-run] Would execute in .conductor/amp-20241024-184501:
-#   make build --dangerously-allow-all
+#   amp --dangerously-allow-all build the project
 ```
 
 ### Environment Variable Overrides
@@ -135,12 +145,13 @@ Override flags for any agent:
 ```bash
 # Use custom flags for Claude
 export YOLO_FLAGS_claude="--yolo --custom-flag"
-yolo claude echo "test"
-# Runs: echo test --yolo --custom-flag
+yolo claude "test command"
+# Runs: claude --yolo --custom-flag test command
 
 # Override for cursor-agent
 export YOLO_FLAGS_cursor_agent="--super-force"
-yolo cursor-agent run-task
+yolo cursor-agent "run task"
+# Runs: cursor-agent --super-force run task
 ```
 
 ## 🔧 Configuration
@@ -176,7 +187,7 @@ No other dependencies. Pure bash.
 ## 📋 Command Reference
 
 ```
-Usage: yolo [-w|--worktree] [--dry-run] <agent> <command> [args...]
+Usage: yolo [-w|--worktree] [--dry-run] <agent> [args...]
 
 Options:
   -w, --worktree      Create and run in a new git worktree
@@ -188,9 +199,9 @@ Agents:
   codex, claude, copilot, droid, amp, cursor-agent, or any custom agent
 
 Examples:
-  yolo claude gh pr create
-  yolo -w amp edit file.js
-  yolo --dry-run codex make build
+  yolo claude "create a PR for bug fix"
+  yolo -w amp "edit file.js"
+  yolo --dry-run codex "build the project"
 ```
 
 ## 🧪 Testing

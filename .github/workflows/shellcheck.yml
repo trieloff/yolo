@@ -22,8 +22,18 @@ jobs:
       run: |
         test -x executable_yolo || (echo "executable_yolo is not executable" && exit 1)
         test -x install.sh || (echo "install.sh is not executable" && exit 1)
+        test -x tests/test_flags.sh || (echo "tests/test_flags.sh is not executable" && exit 1)
+        test -x tests/test_worktree.sh || (echo "tests/test_worktree.sh is not executable" && exit 1)
         
     - name: Test yolo help
       run: |
         ./executable_yolo --help
         ./executable_yolo --version
+        
+    - name: Run flag tests
+      run: |
+        ./tests/test_flags.sh
+        
+    - name: Run worktree tests
+      run: |
+        ./tests/test_worktree.sh

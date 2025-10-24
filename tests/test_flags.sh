@@ -78,7 +78,7 @@ test_agent_flags() {
     
     info "Testing $agent flags..."
     local output
-    output=$("$YOLO_BIN" --dry-run "$agent" echo "test" 2>&1 || true)
+    output=$("$YOLO_BIN" --dry-run "$agent" "test arg" 2>&1 || true)
     
     if [[ "$output" == *"$expected"* ]]; then
         pass "$agent uses correct flags: $expected"
@@ -92,7 +92,7 @@ test_env_override() {
     info "Testing environment variable override..."
     
     local output
-    output=$(YOLO_FLAGS_claude="--custom-flag" "$YOLO_BIN" --dry-run claude echo "test" 2>&1 || true)
+    output=$(YOLO_FLAGS_claude="--custom-flag" "$YOLO_BIN" --dry-run claude "test" 2>&1 || true)
     
     if [[ "$output" == *"--custom-flag"* ]]; then
         pass "Environment override works for claude"
