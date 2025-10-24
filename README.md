@@ -1,3 +1,5 @@
+![YOLO - AI CLI Wrapper with Worktree Isolation](hero-banner.jpg)
+
 # YOLO - AI CLI Tool Wrapper with Worktree Support
 
 > "You Only Launch Once... but in an isolated git worktree!"
@@ -8,11 +10,14 @@ Part of the **AI-Aligned** toolchain:
 - [ai-aligned-git](https://github.com/trieloff/ai-aligned-git) - Git wrapper for safe AI commit practices
 - [ai-aligned-gh](https://github.com/trieloff/ai-aligned-gh) - GitHub CLI wrapper for proper AI attribution
 - **yolo** - AI CLI launcher with worktree isolation (this project)
+ - [vibe-coded-badge-action](https://github.com/trieloff/vibe-coded-badge-action) - Badge showing AI-generated code percentage
+ - [gh-workflow-peek](https://github.com/trieloff/gh-workflow-peek) - Smarter GitHub Actions log filtering
 
 ## Features
 
 - 🚀 **Quick Launch**: Simple wrapper to launch AI tools with one command
 - 🎯 **Smart Flags**: Automatically adds appropriate bypass flags for each AI tool
+- 🎲 **Full YOLO Mode**: Run without arguments to randomly select an installed agent
 - 🌳 **Worktree Isolation**: Optional `-w` flag creates isolated git worktrees
 - 🔒 **Safe Experimentation**: Work in isolated environments without affecting main codebase
 - 🧹 **Clean History**: Separate branches for each agent session with timestamps
@@ -56,6 +61,23 @@ source ~/.bashrc  # or ~/.zshrc, ~/.config/fish/config.fish, etc.
 ```
 
 ## Usage
+
+### Full YOLO Mode
+
+Can't decide which AI assistant to use? Let YOLO decide for you!
+
+```bash
+# Randomly select from all installed coding agents
+yolo
+
+# Full YOLO in a new worktree
+yolo -w
+
+# See what would happen without actually running
+yolo --dry-run
+```
+
+When you run `yolo` without specifying a command, it scans your system for all installed supported coding agents (codex, claude, copilot, droid, amp, cursor-agent, opencode) and picks one at random. You only live yolo - even choosing your AI assistant is too much commitment!
 
 ### Basic Usage
 
@@ -117,6 +139,10 @@ yolo -w -nc claude "keep this work"
 ### Examples
 
 ```bash
+# Full YOLO mode - random agent selection
+yolo
+yolo -w  # Random agent in a new worktree
+
 # Basic usage
 yolo claude
 yolo claude "fix all the bugs"
@@ -137,6 +163,7 @@ yolo --help
 yolo --version
 
 # Dry-run mode
+yolo --dry-run  # See which agent would be selected
 yolo --dry-run claude "test changes"
 yolo -n codex  # Short form
 
@@ -146,6 +173,26 @@ git branch -D yolo/<agent>/<YYYYMMDD-HHMMSS>
 ```
 
 ## How It Works
+
+### Full YOLO Mode
+
+When you run `yolo` without specifying a command:
+
+```bash
+# You type:
+yolo
+
+# YOLO does:
+# 1. Scans PATH for installed agents (codex, claude, copilot, droid, amp, cursor-agent, opencode)
+# 2. Picks one at random using $RANDOM
+# 3. Adds appropriate flags for that agent
+# 4. Launches it
+
+# Example output:
+# Full YOLO mode activated! Picking a random coding agent...
+# Selected: claude
+# [claude launches with --dangerously-skip-permissions]
+```
 
 ### Flag Mapping
 
@@ -388,6 +435,8 @@ YOLO adds flags to commands. If your command already has conflicting flags, they
 
 - [ai-aligned-git](https://github.com/trieloff/ai-aligned-git) - Constrains AI tools to safer git practices
 - [ai-aligned-gh](https://github.com/trieloff/ai-aligned-gh) - Ensures proper bot attribution for GitHub operations
+- [vibe-coded-badge-action](https://github.com/trieloff/vibe-coded-badge-action) - Badge that visualizes AI contributions in your repo
+- [gh-workflow-peek](https://github.com/trieloff/gh-workflow-peek) - Filter and analyze GitHub Actions logs quickly
 
 ## License
 

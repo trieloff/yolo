@@ -67,7 +67,7 @@ show_usage() {
     cat << EOF
 YOLO - AI CLI Tool Wrapper with Worktree Support
 
-Usage: yolo [OPTIONS] <command> [args...]
+Usage: yolo [OPTIONS] [command] [args...]
 
 Options:
   -w, --worktree    Create a git worktree in .conductor/ before running command
@@ -87,7 +87,13 @@ Supported Commands:
   opencode          No extra flags added
   <other>           Adds --yolo (generic fallback)
 
+Full YOLO Mode:
+  Run 'yolo' without a command to randomly select an installed coding agent.
+  You only live yolo - let fate decide which AI assistant you get!
+
 Examples:
+  yolo                             # Full YOLO mode - random agent selection
+  yolo -w                          # Full YOLO mode in a new worktree
   yolo claude                      # Run claude with --dangerously-skip-permissions
   yolo -w claude "fix the bug"     # Create worktree, then run claude (prompt for cleanup)
   yolo -w -c claude "experiment"   # Create worktree, auto-cleanup after
@@ -220,6 +226,36 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Get all installed supported coding agents
+get_installed_agents() {
+    local agents=()
+    local supported_commands=("codex" "claude" "copilot" "droid" "amp" "cursor-agent" "opencode")
+
+    for cmd in "${supported_commands[@]}"; do
+        if command_exists "$cmd"; then
+            agents+=("$cmd")
+        fi
+    done
+
+    printf "%s\n" "${agents[@]}"
+}
+
+# Pick a random agent from installed agents
+pick_random_agent() {
+    local agents
+    mapfile -t agents < <(get_installed_agents)
+
+    if [[ ${#agents[@]} -eq 0 ]]; then
+        print_error "no supported coding agents found in PATH"
+        print_info "Supported agents: codex, claude, copilot, droid, amp, cursor-agent, opencode"
+        return 1
+    fi
+
+    # Use RANDOM to pick a random index
+    local random_index=$((RANDOM % ${#agents[@]}))
+    echo "${agents[$random_index]}"
+}
+
 # Clean up worktree and branch
 cleanup_worktree() {
     local branch_name="$1"
@@ -273,7 +309,6 @@ prompt_cleanup() {
             ;;
     esac
 }
-
 # Main function
 main() {
     local use_worktree=false
@@ -328,12 +363,12 @@ main() {
         esac
     done
 
-    # Check if command was provided
+    # If no command was provided, pick a random one (full yolo mode!)
     if [[ -z "$command_name" ]]; then
-        print_error "missing command argument"
-        echo ""
-        show_usage
-        exit 1
+        print_info "Full YOLO mode activated! Picking a random coding agent..."
+        command_name="$(pick_random_agent)" || exit 1
+        print_success "Selected: $command_name"
+        print_info ""
     fi
 
     # Check if command exists
