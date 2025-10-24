@@ -13,6 +13,7 @@ Part of the **AI-Aligned** toolchain:
 
 - 🚀 **Quick Launch**: Simple wrapper to launch AI tools with one command
 - 🎯 **Smart Flags**: Automatically adds appropriate bypass flags for each AI tool
+- 🎲 **Full YOLO Mode**: Run without arguments to randomly select an installed agent
 - 🌳 **Worktree Isolation**: Optional `-w` flag creates isolated git worktrees
 - 🔒 **Safe Experimentation**: Work in isolated environments without affecting main codebase
 - 🧹 **Clean History**: Separate branches for each agent session with timestamps
@@ -56,6 +57,23 @@ source ~/.bashrc  # or ~/.zshrc, ~/.config/fish/config.fish, etc.
 ```
 
 ## Usage
+
+### Full YOLO Mode
+
+Can't decide which AI assistant to use? Let YOLO decide for you!
+
+```bash
+# Randomly select from all installed coding agents
+yolo
+
+# Full YOLO in a new worktree
+yolo -w
+
+# See what would happen without actually running
+yolo --dry-run
+```
+
+When you run `yolo` without specifying a command, it scans your system for all installed supported coding agents (codex, claude, copilot, droid, amp, cursor-agent, opencode) and picks one at random. You only live yolo - even choosing your AI assistant is too much commitment!
 
 ### Basic Usage
 
@@ -107,6 +125,10 @@ yolo -w claude "refactor the entire codebase"
 ### Examples
 
 ```bash
+# Full YOLO mode - random agent selection
+yolo
+yolo -w  # Random agent in a new worktree
+
 # Basic usage
 yolo claude
 yolo claude "fix all the bugs"
@@ -125,6 +147,7 @@ yolo --help
 yolo --version
 
 # Dry-run mode
+yolo --dry-run  # See which agent would be selected
 yolo --dry-run claude "test changes"
 yolo -n codex  # Short form
 
@@ -134,6 +157,26 @@ git branch -D yolo/<agent>/<YYYYMMDD-HHMMSS>
 ```
 
 ## How It Works
+
+### Full YOLO Mode
+
+When you run `yolo` without specifying a command:
+
+```bash
+# You type:
+yolo
+
+# YOLO does:
+# 1. Scans PATH for installed agents (codex, claude, copilot, droid, amp, cursor-agent, opencode)
+# 2. Picks one at random using $RANDOM
+# 3. Adds appropriate flags for that agent
+# 4. Launches it
+
+# Example output:
+# Full YOLO mode activated! Picking a random coding agent...
+# Selected: claude
+# [claude launches with --dangerously-skip-permissions]
+```
 
 ### Flag Mapping
 
