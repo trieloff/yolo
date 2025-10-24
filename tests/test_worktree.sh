@@ -96,13 +96,22 @@ test_worktree_creation() {
     }
     
     # Run yolo with worktree to create a directory and check it exists
-    if "$YOLO_BIN" -w claude sh -c 'echo "success" && pwd' >/dev/null 2>&1; then
+    # Use 'echo' as the agent command (which exists on all systems)
+    local agent="echo"
+    if "$YOLO_BIN" -w "$agent" "success" >/dev/null 2>&1; then
         pass "Worktree command executed successfully"
     else
         fail "Worktree command failed"
         cleanup_test_repo "$test_repo"
         return
     fi
+    
+    # Change back to test repo (yolo -w changes directory to the worktree)
+    cd "$test_repo" || {
+        fail "Could not cd back to test repo"
+        cleanup_test_repo "$test_repo"
+        return
+    }
     
     # Check that .conductor directory was created
     if [ -d "$test_repo/.conductor" ]; then
@@ -113,7 +122,7 @@ test_worktree_creation() {
     
     # Check that a worktree directory exists
     local worktree_count
-    worktree_count=$(find "$test_repo/.conductor" -maxdepth 1 -type d -name "claude-*" 2>/dev/null | wc -l)
+    worktree_count=$(find "$test_repo/.conductor" -maxdepth 1 -type d -name "${agent}-*" 2>/dev/null | wc -l)
     
     if [ "$worktree_count" -gt 0 ]; then
         pass "Worktree directory created in .conductor"
@@ -122,7 +131,7 @@ test_worktree_creation() {
     fi
     
     # Check that the branch was created
-    if git -C "$test_repo" branch --list | grep -q "yolo/claude/"; then
+    if git -C "$test_repo" branch --list | grep -q "yolo/${agent}/"; then
         pass "Branch created with correct pattern"
     else
         fail "Branch not created correctly"
