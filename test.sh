@@ -45,7 +45,7 @@ run_test() {
 # Use local executable for testing (more reliable in CI)
 if [ -x "./executable_yolo" ]; then
     echo "Using local executable for testing"
-    YOLO_CMD="./executable_yolo"
+    YOLO_CMD="$(pwd)/executable_yolo"
 elif command -v yolo >/dev/null 2>&1; then
     YOLO_CMD="yolo"
 else
