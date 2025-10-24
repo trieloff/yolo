@@ -1,0 +1,250 @@
+#!/usr/bin/env bash
+
+# yolo - AI agent wrapper that adds bypass flags and optionally creates git worktrees
+# Portable bash implementation (no elvish dependencies)
+
+set -euo pipefail
+IFS=$'\n\t'
+
+readonly PROG="${0##*/}"
+readonly VERSION="1.0.0"
+
+# Show usage information
+usage() {
+    cat <<EOF
+Usage: $PROG [-w|--worktree] [--dry-run] <agent> <command> [args...]
+
+Run AI coding agents with appropriate bypass flags.
+
+Options:
+  -w, --worktree      Create and run in a new git worktree under .conductor/
+  --dry-run           Print the command that would run without executing it
+  -h, --help          Show this help message
+  --version           Show version information
+
+Agents:
+  codex               - Runs with --dangerously-bypass-approvals-and-sandbox
+  claude              - Runs with --dangerously-skip-permissions
+  copilot             - Runs with --allow-all-tools --allow-all-paths
+  droid               - Runs with --skip-permissions-unsafe
+  amp                 - Runs with --dangerously-allow-all
+  cursor-agent        - Runs with --force
+  *                   - Any other agent runs with --yolo
+
+Examples:
+  $PROG claude gh pr create --title "Fix bug"
+  $PROG -w amp edit src/main.js
+  $PROG --dry-run codex make build
+
+Environment Variables:
+  YOLO_FLAGS_<agent>  - Override flags for a specific agent (e.g., YOLO_FLAGS_claude)
+
+Worktree Mode:
+  When -w/--worktree is used, a new git worktree is created at:
+    .conductor/<agent>-<timestamp>
+  with branch:
+    yolo/<agent>/<timestamp>
+  
+  The command runs in the worktree directory. Use this to isolate AI changes.
+
+EOF
+}
+
+# Print error message and exit
+die() {
+    printf '%s: error: %s\n' "$PROG" "$*" >&2
+    exit 1
+}
+
+# Print warning message
+warn() {
+    printf '%s: warning: %s\n' "$PROG" "$*" >&2
+}
+
+# Print info message
+info() {
+    printf '%s: %s\n' "$PROG" "$*"
+}
+
+# Check if we're in a git repository
+is_git_repo() {
+    git rev-parse --show-toplevel >/dev/null 2>&1
+}
+
+# Generate timestamp in format YYYYMMDD-HHMMSS
+timestamp() {
+    date -u '+%Y%m%d-%H%M%S'
+}
+
+# Get bypass flags for a specific agent
+# Can be overridden via environment variable YOLO_FLAGS_<agent>
+agent_flags() {
+    local agent="${1:-}"
+    
+    # Allow environment override: YOLO_FLAGS_<agent>
+    # Replace hyphens with underscores for valid env var names
+    local var_name="YOLO_FLAGS_${agent//-/_}"
+    
+    # Check if environment override exists
+    if [ -n "${!var_name:-}" ]; then
+        echo "${!var_name}"
+        return 0
+    fi
+    
+    # Default flag mappings based on agent
+    case "$agent" in
+        codex)
+            echo "--dangerously-bypass-approvals-and-sandbox"
+            ;;
+        claude)
+            echo "--dangerously-skip-permissions"
+            ;;
+        copilot)
+            echo "--allow-all-tools --allow-all-paths"
+            ;;
+        droid)
+            echo "--skip-permissions-unsafe"
+            ;;
+        amp)
+            echo "--dangerously-allow-all"
+            ;;
+        cursor-agent)
+            echo "--force"
+            ;;
+        *)
+            # Default to --yolo for unknown agents
+            echo "--yolo"
+            ;;
+    esac
+}
+
+# Create a git worktree for the agent
+# Outputs the worktree directory path
+create_worktree() {
+    local agent="$1"
+    
+    # Verify we're in a git repository
+    if ! is_git_repo; then
+        die "Not in a git repository. Cannot create worktree."
+    fi
+    
+    # Get the repository root
+    local repo_root
+    repo_root="$(git rev-parse --show-toplevel)"
+    
+    # Generate unique identifiers
+    local ts
+    ts="$(timestamp)"
+    local worktree_dir="$repo_root/.conductor/${agent}-${ts}"
+    local branch_name="yolo/${agent}/${ts}"
+    
+    # Create .conductor directory if it doesn't exist
+    mkdir -p "$repo_root/.conductor"
+    
+    # Check if worktree path already exists
+    if [ -e "$worktree_dir" ]; then
+        die "Worktree path already exists: $worktree_dir"
+    fi
+    
+    # Create the worktree with a new branch
+    info "Creating worktree at $worktree_dir with branch $branch_name" >&2
+    if ! git worktree add -b "$branch_name" "$worktree_dir" HEAD >&2 2>&1; then
+        die "Failed to create worktree"
+    fi
+    
+    # Export branch name for reference
+    export YOLO_BRANCH="$branch_name"
+    
+    # Return the worktree directory
+    echo "$worktree_dir"
+}
+
+# Main function
+main() {
+    local use_worktree=0
+    local dry_run=0
+    local agent=""
+    local cmd=""
+    
+    # Parse options
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -w|--worktree)
+                use_worktree=1
+                shift
+                ;;
+            --dry-run)
+                dry_run=1
+                shift
+                ;;
+            -h|--help)
+                usage
+                exit 0
+                ;;
+            --version)
+                echo "$PROG $VERSION"
+                exit 0
+                ;;
+            --)
+                shift
+                break
+                ;;
+            -*)
+                die "Unknown option: $1"
+                ;;
+            *)
+                # First non-option argument is the agent
+                break
+                ;;
+        esac
+    done
+    
+    # Require at least agent and command
+    if [ $# -lt 2 ]; then
+        usage
+        die "Missing required arguments: <agent> <command>"
+    fi
+    
+    # Extract agent and command
+    agent="$1"
+    shift
+    cmd="$1"
+    shift
+    
+    # Get flags for this agent
+    local flags
+    flags="$(agent_flags "$agent")"
+    
+    # Determine where to run the command
+    local run_dir="."
+    if [ "$use_worktree" -eq 1 ]; then
+        run_dir="$(create_worktree "$agent")"
+        info "Switching to worktree: $run_dir" >&2
+    fi
+    
+    # Dry run mode - just print what would be executed
+    if [ "$dry_run" -eq 1 ]; then
+        if [ "$use_worktree" -eq 1 ]; then
+            info "[dry-run] Branch: ${YOLO_BRANCH:-}"
+            info "[dry-run] Worktree: $run_dir"
+        fi
+        info "[dry-run] Would execute in $run_dir:"
+        # shellcheck disable=SC2145
+        info "  $cmd $@ $flags"
+        exit 0
+    fi
+    
+    # Execute the command in the target directory
+    # Use a subshell to avoid polluting current directory
+    (
+        cd "$run_dir" || exit 1
+        
+        # Execute the command with agent-specific flags
+        # Word splitting is intentional for flags
+        # shellcheck disable=SC2086
+        exec "$cmd" "$@" $flags
+    )
+}
+
+# Run main function with all arguments
+main "$@"
