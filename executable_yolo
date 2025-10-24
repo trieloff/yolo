@@ -48,6 +48,7 @@ Examples:
 
 Environment Variables:
   YOLO_FLAGS_<agent>  Override flags for a specific agent (e.g., YOLO_FLAGS_claude)
+                      Note: hyphens in agent names become underscores (e.g., cursor-agent → YOLO_FLAGS_cursor_agent)
 
 EOF
 }
@@ -131,7 +132,8 @@ fi
 
 # Map commands to their appropriate bypass flags
 # Check for environment variable override first
-env_var="YOLO_FLAGS_$cmd"
+# Convert hyphens to underscores for valid bash variable names
+env_var="YOLO_FLAGS_${cmd//-/_}"
 if [ -n "${!env_var:-}" ]; then
     print_color "$GREEN" "Running $cmd with custom flags: ${!env_var}"
     # shellcheck disable=SC2086

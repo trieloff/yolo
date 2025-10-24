@@ -92,6 +92,8 @@ chmod +x /tmp/yolo-test/mock-agent
 
 # Test 4: Unknown command with --yolo flag
 test_unknown_command() {
+    # Ensure no environment override is set
+    unset YOLO_FLAGS_mock_agent
     export PATH="/tmp/yolo-test:$PATH"
     $YOLO_CMD mock-agent test-arg 2>&1 | grep -q "Running mock-agent with --yolo"
 }

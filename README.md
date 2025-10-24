@@ -167,9 +167,13 @@ yolo claude "test"
 # Override flags for any agent
 export YOLO_FLAGS_droid="--my-custom-flags"
 yolo droid "refactor code"
+
+# For agents with hyphens, use underscores
+export YOLO_FLAGS_cursor_agent="--my-flags"
+yolo cursor-agent "test"
 ```
 
-The pattern is `YOLO_FLAGS_<agent>` where `<agent>` is the command name.
+The pattern is `YOLO_FLAGS_<agent>` where `<agent>` is the command name with hyphens converted to underscores.
 
 ## 🔒 Safety
 
