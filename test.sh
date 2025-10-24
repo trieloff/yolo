@@ -134,19 +134,27 @@ fi
 if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
     git init
 fi
-output=""
-output=$(./executable_yolo -w other test)
-for d in .conductor/other-*; do
-    if [ ! -d "$d" ]; then
-        echo "Test failed for worktree creation"
-        exit 1
-    fi
-done
+
+WORKTREE_PATH=$(./executable_yolo -w other test | cut -d ' ' -f 3)
+
+if [ ! -d "$WORKTREE_PATH" ]; then
+    echo "Test failed for worktree creation"
+    exit 1
+fi
+
+cd "$WORKTREE_PATH"
+
+output=$(../executable_yolo other test)
 
 if [ "$output" != "other --yolo test" ]; then
     echo "Test failed for worktree command"
     exit 1
 fi
+
+cd ..
+
+git worktree remove "$WORKTREE_PATH"
+git worktree prune
 
 # Test command not found
 output=""
