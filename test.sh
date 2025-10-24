@@ -111,10 +111,14 @@ run_test "OpenCode command documented in help" test_opencode_mapping
 # Test 7: Worktree flag parsing (without actually creating worktree)
 test_worktree_flag() {
     # Test with non-git directory - should fail gracefully
-    cd /tmp
+    temp_test_dir=$(mktemp -d)
+    cd "$temp_test_dir"
     # Strip ANSI color codes for reliable grepping
     output=$($YOLO_CMD -w mock-agent test 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
-    echo "$output" | grep -q "not in a git repository"
+    result=$?
+    cd /tmp  # Go back to a safe directory
+    rm -rf "$temp_test_dir"
+    echo "$output" | grep -q "Error: not in a git repository"
     return $?
 }
 run_test "Worktree flag requires git repository" test_worktree_flag
