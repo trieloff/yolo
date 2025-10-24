@@ -130,7 +130,7 @@ test_git_repo_check() {
     cd /tmp
     rm -rf "$temp_repo"
     
-    return "$result"
+    return $result
 }
 run_test "Worktree creation in git repo" test_git_repo_check
 
