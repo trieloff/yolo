@@ -95,6 +95,14 @@ yolo -w droid "Refactor the entire authentication module"
 # Run Cursor Agent with worktree
 yolo -w cursor-agent "Add comprehensive tests"
 
+# Dry-run to see what command would be executed
+yolo --dry-run claude "implement feature"
+# Output: claude --dangerously-skip-permissions implement feature
+
+# Combine dry-run with worktree
+yolo -w --dry-run droid "big refactor"
+# Output: droid --skip-permissions-unsafe big refactor
+
 # Run any other agent (adds --yolo flag)
 yolo my-custom-agent "do something"
 ```

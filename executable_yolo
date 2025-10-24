@@ -30,6 +30,7 @@ Options:
   -w, --worktree    Create a git worktree before running the command
   -h, --help        Show this help message
   --version         Show version information
+  --dry-run         Show the command that would be executed without running it
 
 Supported Commands:
   codex             Anthropic Code (adds --dangerously-bypass-approvals-and-sandbox)
@@ -60,10 +61,15 @@ show_version() {
 
 # Parse options
 use_worktree=false
+dry_run=false
 while [[ $# -gt 0 ]]; do
     case $1 in
         -w|--worktree)
             use_worktree=true
+            shift
+            ;;
+        --dry-run)
+            dry_run=true
             shift
             ;;
         -h|--help)
@@ -135,6 +141,11 @@ fi
 # Convert hyphens to underscores for valid bash variable names
 env_var="YOLO_FLAGS_${cmd//-/_}"
 if [ -n "${!env_var:-}" ]; then
+    if [ "$dry_run" = true ]; then
+        # shellcheck disable=SC2086
+        echo "$cmd" ${!env_var} "${rest_args[@]}"
+        exit 0
+    fi
     print_color "$GREEN" "Running $cmd with custom flags: ${!env_var}"
     # shellcheck disable=SC2086
     exec "$cmd" ${!env_var} "${rest_args[@]}"
@@ -143,35 +154,63 @@ fi
 case "$cmd" in
     codex)
         flags=(--dangerously-bypass-approvals-and-sandbox)
+        if [ "$dry_run" = true ]; then
+            echo codex "${flags[@]}" "${rest_args[@]}"
+            exit 0
+        fi
         print_color "$GREEN" "Running codex with ${flags[*]}"
         exec codex "${flags[@]}" "${rest_args[@]}"
         ;;
     claude)
         flags=(--dangerously-skip-permissions)
+        if [ "$dry_run" = true ]; then
+            echo claude "${flags[@]}" "${rest_args[@]}"
+            exit 0
+        fi
         print_color "$GREEN" "Running claude with ${flags[*]}"
         exec claude "${flags[@]}" "${rest_args[@]}"
         ;;
     copilot)
         flags=(--allow-all-tools --allow-all-paths)
+        if [ "$dry_run" = true ]; then
+            echo copilot "${flags[@]}" "${rest_args[@]}"
+            exit 0
+        fi
         print_color "$GREEN" "Running copilot with ${flags[*]}"
         exec copilot "${flags[@]}" "${rest_args[@]}"
         ;;
     droid)
         flags=(--skip-permissions-unsafe)
+        if [ "$dry_run" = true ]; then
+            echo droid "${flags[@]}" "${rest_args[@]}"
+            exit 0
+        fi
         print_color "$GREEN" "Running droid with ${flags[*]}"
         exec droid "${flags[@]}" "${rest_args[@]}"
         ;;
     amp)
         flags=(--dangerously-allow-all)
+        if [ "$dry_run" = true ]; then
+            echo amp "${flags[@]}" "${rest_args[@]}"
+            exit 0
+        fi
         print_color "$GREEN" "Running amp with ${flags[*]}"
         exec amp "${flags[@]}" "${rest_args[@]}"
         ;;
     cursor-agent)
         flags=(--force)
+        if [ "$dry_run" = true ]; then
+            echo cursor-agent "${flags[@]}" "${rest_args[@]}"
+            exit 0
+        fi
         print_color "$GREEN" "Running cursor-agent with ${flags[*]}"
         exec cursor-agent "${flags[@]}" "${rest_args[@]}"
         ;;
     opencode)
+        if [ "$dry_run" = true ]; then
+            echo opencode "${rest_args[@]}"
+            exit 0
+        fi
         print_color "$GREEN" "Running opencode (no additional flags needed)"
         exec opencode "${rest_args[@]}"
         ;;
@@ -182,6 +221,10 @@ case "$cmd" in
             exit 1
         fi
         flags=(--yolo)
+        if [ "$dry_run" = true ]; then
+            echo "$cmd" "${flags[@]}" "${rest_args[@]}"
+            exit 0
+        fi
         print_color "$GREEN" "Running $cmd with ${flags[*]}"
         exec "$cmd" "${flags[@]}" "${rest_args[@]}"
         ;;
