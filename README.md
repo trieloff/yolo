@@ -21,6 +21,7 @@ Part of the **AI-Aligned** toolchain:
 - 🌳 **Worktree Isolation**: Optional `-w` flag creates isolated git worktrees
 - 🔒 **Safe Experimentation**: Work in isolated environments without affecting main codebase
 - 🧹 **Clean History**: Separate branches for each agent session with timestamps
+- 🧽 **Mop Command**: Clean up all worktrees, branches, and processes with one command
 - 🛠️ **Shell Agnostic**: Works in bash, zsh, fish, elvish, and more
 
 ## Why YOLO?
@@ -29,7 +30,8 @@ AI coding assistants often require various "bypass" or "danger" flags to operate
 
 1. **Remembering the flags** - No need to memorize `--dangerously-skip-permissions` or `--allow-all-tools`
 2. **Creating safe workspaces** - Use `-w` to experiment in isolated git worktrees
-3. **Organizing experiments** - Each session gets its own timestamped branch in `.conductor/`
+3. **Organizing experiments** - Each session gets its own timestamped branch in `.yolo/`
+4. **Easy cleanup** - Use `yolo --mop` to clean up all worktrees and branches
 
 ## Installation
 
@@ -97,7 +99,7 @@ yolo copilot chat
 Create an isolated git worktree before launching the AI tool:
 
 ```bash
-# Create worktree in .conductor/claude-1 with branch claude-1
+# Create worktree in .yolo/claude-1 with branch claude-1
 # Prompts for cleanup when command finishes
 yolo -w claude "refactor the entire codebase"
 
@@ -113,15 +115,32 @@ yolo -w -nc claude "keep this work"
 
 **What happens in worktree mode:**
 1. Checks you're in a git repository
-2. Creates `.conductor/` directory
+2. Creates `.yolo/` directory
 3. Creates a new branch: `<command>-N` (where N is the lowest available number)
-4. Creates worktree at `.conductor/<command>-N`
+4. Creates worktree at `.yolo/<command>-N`
 5. Changes to the worktree directory
 6. Launches the AI tool
 7. After completion:
    - With `-c/--clean`: Automatically removes worktree and branch
    - With `-nc/--no-clean`: Preserves worktree without prompting
    - Without flags: Prompts user whether to clean up
+
+### Cleanup Mode
+
+Clean up all YOLO worktrees, branches, and processes at once:
+
+```bash
+# Mop up everything
+yolo --mop  # or yolo -m
+
+# What it does:
+# 1. Finds and kills processes running in .yolo directories (asks for confirmation)
+# 2. Removes all .yolo worktrees
+# 3. Deletes all agent branches (claude-N, codex-N, etc.)
+# 4. Removes empty .yolo directory
+```
+
+Use `--mop` to clean up orphaned worktrees from interrupted sessions or when you want a fresh start.
 
 ### Supported Commands
 

@@ -70,10 +70,11 @@ YOLO - AI CLI Tool Wrapper with Worktree Support
 Usage: yolo [OPTIONS] [command] [args...]
 
 Options:
-  -w, --worktree    Create a git worktree in .conductor/ before running command
+  -w, --worktree    Create a git worktree in .yolo/ before running command
   -c, --clean       Automatically clean up worktree after command completes
   -nc, --no-clean   Preserve worktree after command completes (no prompt)
   -n, --dry-run     Show what would be executed without running it
+  -m, --mop         Clean up all YOLO worktrees, branches, and processes
   -h, --help        Show this help message
   -v, --version     Show version information
 
@@ -111,10 +112,17 @@ Examples:
 
 Worktree Mode:
   When using -w/--worktree flag:
-  - Creates .conductor/ directory in repository root
+  - Creates .yolo/ directory in repository root
   - Creates branch: <command>-N (where N is the lowest available number)
-  - Creates worktree: .conductor/<command>-N
+  - Creates worktree: .yolo/<command>-N
   - Changes to worktree directory before running command
+
+Cleanup Mode:
+  When using -m/--mop flag:
+  - Removes all .yolo/ worktrees
+  - Deletes all associated branches
+  - Kills any processes running in .yolo/ directories
+  - Use this to clean up orphaned worktrees from interrupted sessions
 
 Part of the AI-Aligned toolchain. See:
   https://github.com/trieloff/ai-aligned-git
@@ -149,10 +157,10 @@ create_worktree() {
 
     YOLO_REPO_ROOT="$(get_repo_root)"
 
-    local conductor_dir="$YOLO_REPO_ROOT/.conductor"
-    if [[ ! -d "$conductor_dir" ]]; then
-        mkdir -p "$conductor_dir"
-        print_info "Created .conductor directory"
+    local yolo_dir="$YOLO_REPO_ROOT/.yolo"
+    if [[ ! -d "$yolo_dir" ]]; then
+        mkdir -p "$yolo_dir"
+        print_info "Created .yolo directory"
     fi
 
     # Find the lowest available number for this agent
@@ -776,14 +784,31 @@ run_multi_agents() {
         print_info "Using Ghostty native splits for $n agents"
         print_info "[DEBUG] Building wrapped commands for $n agents"
 
-        # Build shell wrapper commands that cd to the worktree and run the agent
-        # Use ; instead of && for shell compatibility (elvish, fish, etc.)
+        # Get repo root for cleanup
+        local repo_root
+        repo_root="$(get_repo_root)"
+
+        # Build shell wrapper commands with automatic cleanup
         local -a wrapped_cmds=()
         local i
         for i in "${!agent_cmds[@]}"; do
-            local cd_cmd="cd $(printf %q "${agent_paths[$i]}"); ${agent_cmds[$i]}"
-            print_info "[DEBUG] Wrapped command $i: $cd_cmd"
-            wrapped_cmds+=("$cd_cmd")
+            local worktree_path="${agent_paths[$i]}"
+            local branch_name="${agent_branches[$i]}"
+            local is_first_split=$((i == 0))
+
+            # Build cleanup script that runs after agent exits
+            local cleanup_script="cd $(printf %q "$repo_root"); git worktree remove $(printf %q "$worktree_path") --force; git branch -D $(printf %q "$branch_name")"
+
+            # Add exit command for non-first splits to close them after cleanup
+            if [[ "$is_first_split" == "0" ]]; then
+                cleanup_script="$cleanup_script; exit"
+            fi
+
+            # Create wrapped command: cd to worktree, run agent, then cleanup
+            local wrapped="cd $(printf %q "$worktree_path"); ${agent_cmds[$i]}; $cleanup_script"
+
+            print_info "[DEBUG] Wrapped command $i: $wrapped"
+            wrapped_cmds+=("$wrapped")
         done
 
         # Call Ghostty-specific implementation
@@ -792,14 +817,13 @@ run_multi_agents() {
         local ghostty_rc=$?
         print_info "[DEBUG] run_multi_agents_ghostty returned: $ghostty_rc"
 
-        # Inform user about worktrees (cannot auto-cleanup since Ghostty doesn't block)
-        print_info "Agents running in worktrees:"
+        # Inform user about automatic cleanup
+        print_info "Agents running in worktrees (auto-cleanup enabled):"
         local j
         for j in "${!agent_branches[@]}"; do
             print_info "  ${clean_agents[$j]}: ${agent_paths[$j]} (branch: ${agent_branches[$j]})"
         done
-        print_warning "Worktrees will not be auto-cleaned. Close splits when done, then run:"
-        print_info "  yolo-cleanup  # (or manually: git worktree remove & git branch -D)"
+        print_success "When you exit an agent, its worktree will be automatically cleaned up"
 
         print_info "[DEBUG] run_multi_agents returning 0 from ghostty block"
         return 0
@@ -944,6 +968,102 @@ pick_random_agent() {
 }
 
 # Clean up worktree and branch
+# Mop up all YOLO worktrees, branches, and processes
+mop_cleanup() {
+    print_info "YOLO Mop: Cleaning up all worktrees, branches, and processes"
+
+    local repo_root
+    repo_root="$(get_repo_root)"
+    if [[ -z "$repo_root" ]]; then
+        print_error "Not in a git repository"
+        return 1
+    fi
+
+    cd "$repo_root" || return 1
+
+    local yolo_dir="$repo_root/.yolo"
+
+    # Find all processes running in .yolo directories
+    print_info "Checking for processes running in .yolo directories..."
+    local pids=()
+    if [[ -d "$yolo_dir" ]]; then
+        while IFS= read -r pid; do
+            if [[ -n "$pid" ]]; then
+                pids+=("$pid")
+            fi
+        done < <(lsof +D "$yolo_dir" 2>/dev/null | tail -n +2 | awk '{print $2}' | sort -u)
+
+        if (( ${#pids[@]} > 0 )); then
+            print_warning "Found ${#pids[@]} process(es) running in .yolo directories"
+            for pid in "${pids[@]}"; do
+                local cmd
+                cmd="$(ps -p "$pid" -o command= 2>/dev/null || echo "unknown")"
+                print_info "  PID $pid: ${cmd:0:80}"
+            done
+            read -r -p "Kill these processes? (y/n): " response
+            if [[ "$response" =~ ^[Yy]$ ]]; then
+                for pid in "${pids[@]}"; do
+                    if kill "$pid" 2>/dev/null; then
+                        print_success "Killed process $pid"
+                    else
+                        print_warning "Failed to kill process $pid (may need sudo)"
+                    fi
+                done
+                sleep 1
+            fi
+        else
+            print_info "No processes found"
+        fi
+    fi
+
+    # Remove all worktrees in .yolo/
+    print_info "Removing all .yolo worktrees..."
+    local removed_count=0
+    while IFS= read -r worktree_path; do
+        if [[ "$worktree_path" =~ \.yolo/ ]]; then
+            if git worktree remove "$worktree_path" --force 2>/dev/null; then
+                print_success "Removed: $worktree_path"
+                ((removed_count++))
+            else
+                print_warning "Failed to remove: $worktree_path"
+            fi
+        fi
+    done < <(git worktree list --porcelain | grep "^worktree " | cut -d' ' -f2)
+
+    if (( removed_count == 0 )); then
+        print_info "No worktrees found"
+    fi
+
+    # Delete all branches that were associated with worktrees
+    print_info "Deleting associated branches..."
+    local branch_count=0
+    while IFS= read -r branch; do
+        # Look for branches that match agent naming patterns or have .yolo in description
+        if git branch -D "$branch" 2>/dev/null; then
+            print_success "Deleted branch: $branch"
+            ((branch_count++))
+        fi
+    done < <(git branch | sed 's/^[* ] //' | grep -E '^(claude|codex|copilot|amp|opencode|gemini|droid|cursor-agent)-[0-9]+$')
+
+    if (( branch_count == 0 )); then
+        print_info "No agent branches found"
+    fi
+
+    # Remove .yolo directory if empty
+    if [[ -d "$yolo_dir" ]]; then
+        if [[ -z "$(ls -A "$yolo_dir")" ]]; then
+            rmdir "$yolo_dir"
+            print_success "Removed empty .yolo directory"
+        else
+            print_warning ".yolo directory still contains files"
+            ls -la "$yolo_dir"
+        fi
+    fi
+
+    print_success "Mop complete!"
+    return 0
+}
+
 cleanup_worktree() {
     local branch_name="$1"
     local worktree_path="$2"
@@ -1030,6 +1150,10 @@ main() {
             -n|--dry-run)
                 dry_run=true
                 shift
+                ;;
+            -m|--mop)
+                mop_cleanup
+                exit 0
                 ;;
             -*)
                 print_error "unknown option: $1"
