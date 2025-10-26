@@ -1019,12 +1019,15 @@ run_multi_agents() {
 
 # Pick a random agent from installed agents
 pick_random_agent() {
-    local agents
-    mapfile -t agents < <(get_installed_agents)
+    local -a agents
+    local agent
+    while IFS= read -r agent; do
+        agents+=("$agent")
+    done < <(get_installed_agents)
 
     if [[ ${#agents[@]} -eq 0 ]]; then
         print_error "no supported coding agents found in PATH"
-        print_info "Supported agents: codex, claude, copilot, droid, amp, cursor-agent, opencode"
+        print_info "Supported agents: codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini"
         return 1
     fi
 
