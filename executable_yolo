@@ -353,7 +353,6 @@ kdl_escape() {
 convert_to_typeable() {
     local cmd="$1"
     local result=""
-    local in_word=false
     local word=""
 
     # Parse word by word, tracking if we need quotes
@@ -368,13 +367,11 @@ convert_to_typeable() {
                     # Escaped character - this indicates the word needs quotes
                     word+="$next_char"
                     ((i+=2))
-                    in_word=true
                     ;;
                 *)
                     # Not an escape sequence we care about, keep the backslash
                     word+="$char"
                     ((i++))
-                    in_word=true
                     ;;
             esac
         elif [[ "$char" =~ [[:space:]\;] ]]; then
@@ -390,11 +387,9 @@ convert_to_typeable() {
             fi
             result+="$char"
             ((i++))
-            in_word=false
         else
             word+="$char"
             ((i++))
-            in_word=true
         fi
     done
 
@@ -411,18 +406,21 @@ convert_to_typeable() {
 }
 
 # Send command to current Ghostty split via AppleScript
+# shellcheck disable=SC2027,SC1078,SC2154
 send_ghostty_command() {
     local cmd="$1"
-    print_debug ""Sending command to split: $cmd"
+    print_debug "Sending command to split: $cmd"
 
     # Convert backslash-escaped format to typeable format
     local typeable_cmd
-    typeable_cmd="$(convert_to_typeable "$cmd")"
+    typeable_cmd=$(convert_to_typeable "$cmd")
     print_debug "Converted to typeable: $typeable_cmd"
 
     # Escape for AppleScript: both backslashes and quotes need escaping
     # This ensures AppleScript can parse the string literal correctly
-    local escaped_cmd="$typeable_cmd"
+    # shellcheck disable=SC2027,SC1078,SC2154
+    local escaped_cmd
+    escaped_cmd="$typeable_cmd"
     escaped_cmd="${escaped_cmd//\\/\\\\}"    # Escape backslashes: \ -> \\
     escaped_cmd="${escaped_cmd//\"/\\\"}"    # Escape quotes: " -> \"
 
@@ -815,6 +813,7 @@ run_multi_agents() {
                 shell_cmd="copilot $flags_str --add-dir $(printf %q \"$YOLO_WORKTREE_PATH\") -p $(printf %q \"$prompt_joined\"); copilot $flags_str --add-dir $(printf %q \"$YOLO_WORKTREE_PATH\") --continue"
             else
                 # Start interactive with directory trusted
+                # shellcheck disable=SC2206
                 cmd_arr=("copilot" $flags_str --add-dir "$YOLO_WORKTREE_PATH")
             fi
         fi
@@ -861,7 +860,8 @@ run_multi_agents() {
             local is_first_split=$((i == 0))
 
             # Build cleanup script that runs after agent exits
-            local cleanup_script="cd $(printf %q "$repo_root"); git worktree remove $(printf %q "$worktree_path") --force; git branch -D $(printf %q "$branch_name")"
+            local cleanup_script
+            cleanup_script="cd $(printf %q "$repo_root"); git worktree remove $(printf %q "$worktree_path") --force; git branch -D $(printf %q "$branch_name")"
 
             # Add exit command for non-first splits to close them after cleanup
             if [[ "$is_first_split" == "0" ]]; then
@@ -869,7 +869,8 @@ run_multi_agents() {
             fi
 
             # Create wrapped command: cd to worktree, run agent, then cleanup
-            local wrapped="cd $(printf %q "$worktree_path"); ${agent_cmds[$i]}; $cleanup_script"
+            local wrapped
+            wrapped="cd $(printf %q "$worktree_path"); ${agent_cmds[$i]}; $cleanup_script"
 
             print_debug "Wrapped command $i: $wrapped"
             wrapped_cmds+=("$wrapped")
@@ -893,7 +894,8 @@ run_multi_agents() {
         return 0
 
     elif [[ "$mux" == tmux ]]; then
-        local session="yolo-$(date +%s)"
+        local session
+        session="yolo-$(date +%s)"
         # Start detached session sized to current terminal, first pane at first agent path
         tmux new-session -d -s "$session" -x "$cols" -y "$rows" -c "${agent_paths[0]}"
         # Send first agent command
@@ -963,8 +965,7 @@ run_multi_agents() {
           for r_i in $(seq 0 $((row_count-1))); do
             local cols_in_row=${row_sizes[$r_i]}
             echo "    pane split_direction=\"vertical\" {"
-            local c_i
-            for c_i in $(seq 1 "$cols_in_row"); do
+            for _ in $(seq 1 "$cols_in_row"); do
               local cmd path
               cmd=$(kdl_escape "${agent_cmds[$index]}")
               path=$(kdl_escape "${agent_paths[$index]}")
@@ -981,7 +982,8 @@ run_multi_agents() {
         } > "$layout_file"
 
         # Start a new named session with the layout and attach to it
-        local session="yolo-$(date +%s)"
+        local session
+        session="yolo-$(date +%s)"
         zellij -s "$session" --new-session-with-layout "$layout_file"
         print_success "Launching zellij session: $session with $n panes"
         zellij attach "$session"
