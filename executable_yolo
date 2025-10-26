@@ -283,8 +283,17 @@ detect_terminal_size() {
     echo "$rows $cols"
 }
 
-# Choose multiplexer: prefer tmux if available, else zellij; empty if none
+# Detect if running inside Ghostty terminal
+is_ghostty() {
+    [[ "${TERM_PROGRAM:-}" == "ghostty" ]] || [[ -n "${GHOSTTY_BIN_DIR:-}" ]]
+}
+
+# Choose multiplexer: prefer Ghostty when inside it and AppleScript is available, then zellij, then tmux; empty if none
 choose_multiplexer() {
+    if is_ghostty && command_exists osascript; then
+        echo ghostty
+        return 0
+    fi
     if command_exists zellij; then
         echo zellij
         return 0
@@ -318,6 +327,276 @@ kdl_escape() {
     s="${s//\\/\\\\}"
     s="${s//"\""/\\\"}"
     echo "$s"
+}
+
+# Convert backslash-escaped string to a typeable command
+# Converts: say\ your\ name  →  "say your name" (adds quotes for multi-word args)
+# Converts: \"quoted\"  →  "quoted"
+convert_to_typeable() {
+    local cmd="$1"
+    local result=""
+    local in_word=false
+    local word=""
+
+    # Parse word by word, tracking if we need quotes
+    local i=0
+    while [ $i -lt ${#cmd} ]; do
+        local char="${cmd:$i:1}"
+        local next_char="${cmd:$i+1:1}"
+
+        if [[ "$char" == "\\" ]]; then
+            case "$next_char" in
+                " "|","|"("|")"|'"'|"'")
+                    # Escaped character - this indicates the word needs quotes
+                    word+="$next_char"
+                    ((i+=2))
+                    in_word=true
+                    ;;
+                *)
+                    # Not an escape sequence we care about, keep the backslash
+                    word+="$char"
+                    ((i++))
+                    in_word=true
+                    ;;
+            esac
+        elif [[ "$char" =~ [[:space:]\;] ]]; then
+            # Whitespace or semicolon ends current word
+            if [[ -n "$word" ]]; then
+                # If word contains spaces or commas, quote it
+                if [[ "$word" =~ [[:space:],] ]]; then
+                    result+="\"$word\""
+                else
+                    result+="$word"
+                fi
+                word=""
+            fi
+            result+="$char"
+            ((i++))
+            in_word=false
+        else
+            word+="$char"
+            ((i++))
+            in_word=true
+        fi
+    done
+
+    # Handle last word
+    if [[ -n "$word" ]]; then
+        if [[ "$word" =~ [[:space:],] ]]; then
+            result+="\"$word\""
+        else
+            result+="$word"
+        fi
+    fi
+
+    echo "$result"
+}
+
+# Send command to current Ghostty split via AppleScript
+send_ghostty_command() {
+    local cmd="$1"
+    print_info "[DEBUG] Sending command to split: $cmd"
+
+    # Convert backslash-escaped format to typeable format
+    local typeable_cmd
+    typeable_cmd="$(convert_to_typeable "$cmd")"
+    print_info "[DEBUG] Converted to typeable: $typeable_cmd"
+
+    # Escape for AppleScript: both backslashes and quotes need escaping
+    # This ensures AppleScript can parse the string literal correctly
+    local escaped_cmd="$typeable_cmd"
+    escaped_cmd="${escaped_cmd//\\/\\\\}"    # Escape backslashes: \ -> \\
+    escaped_cmd="${escaped_cmd//\"/\\\"}"    # Escape quotes: " -> \"
+
+    # Type the command and press return
+    print_info "[DEBUG] AppleScript escaped: $escaped_cmd"
+    osascript -e "tell application \"System Events\" to tell process \"Ghostty\" to keystroke \"$escaped_cmd\"" 2>&1 | head -3
+    local rc1=$?
+    print_info "[DEBUG] keystroke exit code: $rc1"
+    sleep 0.1
+    osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke return' 2>&1 | head -3
+    local rc2=$?
+    print_info "[DEBUG] return key exit code: $rc2"
+    return 0
+}
+
+# Launch multiple agents in Ghostty splits with per-agent worktrees
+run_multi_agents_ghostty() {
+    print_info "[DEBUG] run_multi_agents_ghostty called with ${#@} arguments"
+    local -a agent_cmds=("$@")
+    local n=${#agent_cmds[@]}
+    print_info "[DEBUG] Number of agent commands: $n"
+
+    if (( n < 1 )); then
+        print_error "no agent commands provided"
+        return 1
+    fi
+
+    # Ghostty has a practical limit for splits
+    if (( n > 6 )); then
+        print_warning "more than 6 agents; limiting to 6 for Ghostty"
+        n=6
+    fi
+
+    # Detect terminal orientation
+    local rows cols
+    read -r rows cols < <(detect_terminal_size)
+    local is_landscape=false
+    if (( cols >= rows )); then
+        is_landscape=true
+    fi
+
+    print_info "Creating Ghostty splits for $n agents (terminal: ${cols}x${rows})"
+    print_info "[DEBUG] Orientation: landscape=$is_landscape"
+
+    local i=0
+
+    # First agent in current split
+    print_info "[DEBUG] Sending first command (agent $i)"
+    send_ghostty_command "${agent_cmds[$i]}"
+    ((i++))
+
+    # Create splits based on agent count and terminal orientation
+    if (( n == 2 )); then
+        # 2 agents: split horizontally (landscape) or vertically (portrait)
+        if [[ "$is_landscape" == "true" ]]; then
+            # 1|2
+            osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Right" of menu "File" of menu bar 1' >/dev/null 2>&1
+        else
+            # 1 over 2
+            osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Down" of menu "File" of menu bar 1' >/dev/null 2>&1
+        fi
+        sleep 0.4
+        send_ghostty_command "${agent_cmds[$i]}"
+
+    elif (( n == 3 )); then
+        print_info "[DEBUG] Creating 3-agent layout"
+        if [[ "$is_landscape" == "true" ]]; then
+            # Landscape: 1|2|3 (three columns)
+            print_info "[DEBUG] Creating first split right"
+            osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Right" of menu "File" of menu bar 1' 2>&1 | head -3
+            local rc=$?
+            print_info "[DEBUG] Split Right #1 exit code: $rc"
+            sleep 0.4
+            print_info "[DEBUG] Sending second command (agent $i)"
+            send_ghostty_command "${agent_cmds[$((i++))]}"
+
+            print_info "[DEBUG] Creating second split right"
+            osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Right" of menu "File" of menu bar 1' 2>&1 | head -3
+            rc=$?
+            print_info "[DEBUG] Split Right #2 exit code: $rc"
+            sleep 0.4
+            print_info "[DEBUG] Sending third command (agent $i)"
+            send_ghostty_command "${agent_cmds[$i]}"
+        else
+            # Portrait: 1 over 2 over 3 (three rows)
+            osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Down" of menu "File" of menu bar 1' >/dev/null 2>&1
+            sleep 0.4
+            send_ghostty_command "${agent_cmds[$((i++))]}"
+
+            osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Down" of menu "File" of menu bar 1' >/dev/null 2>&1
+            sleep 0.4
+            send_ghostty_command "${agent_cmds[$i]}"
+        fi
+
+    elif (( n == 4 )); then
+        # 4 agents: always 2x2 grid
+        # Create: 1|2 then go left and split both down to get grid
+        osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Right" of menu "File" of menu bar 1' >/dev/null 2>&1
+        sleep 0.4
+        send_ghostty_command "${agent_cmds[$((i++))]}"
+
+        # Go back left and split down
+        osascript -e 'tell application "System Events" to tell process "Ghostty" to key code 123 using {command down, option down}' >/dev/null 2>&1
+        sleep 0.2
+        osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Down" of menu "File" of menu bar 1' >/dev/null 2>&1
+        sleep 0.4
+        send_ghostty_command "${agent_cmds[$((i++))]}"
+
+        # Go back up and right, then split down
+        osascript -e 'tell application "System Events" to tell process "Ghostty" to key code 126 using {command down, option down}' >/dev/null 2>&1
+        sleep 0.2
+        osascript -e 'tell application "System Events" to tell process "Ghostty" to key code 124 using {command down, option down}' >/dev/null 2>&1
+        sleep 0.2
+        osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Down" of menu "File" of menu bar 1' >/dev/null 2>&1
+        sleep 0.4
+        send_ghostty_command "${agent_cmds[$i]}"
+
+    elif (( n >= 5 )); then
+        # 5-6 agents: create grid based on orientation
+        if [[ "$is_landscape" == "true" ]]; then
+            # Landscape: prefer 2 rows x 3 columns
+            # Row 1: 1|2|3
+            osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Right" of menu "File" of menu bar 1' >/dev/null 2>&1
+            sleep 0.4
+            send_ghostty_command "${agent_cmds[$((i++))]}"
+            osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Right" of menu "File" of menu bar 1' >/dev/null 2>&1
+            sleep 0.4
+            send_ghostty_command "${agent_cmds[$((i++))]}"
+
+            # Navigate back to leftmost, split down
+            osascript -e 'tell application "System Events" to tell process "Ghostty" to key code 123 using {command down, option down}' >/dev/null 2>&1
+            sleep 0.2
+            osascript -e 'tell application "System Events" to tell process "Ghostty" to key code 123 using {command down, option down}' >/dev/null 2>&1
+            sleep 0.2
+            osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Down" of menu "File" of menu bar 1' >/dev/null 2>&1
+            sleep 0.4
+            send_ghostty_command "${agent_cmds[$((i++))]}"
+
+            # Split right if we have more
+            if (( i < n )); then
+                osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Right" of menu "File" of menu bar 1' >/dev/null 2>&1
+                sleep 0.4
+                send_ghostty_command "${agent_cmds[$((i++))]}"
+            fi
+            if (( i < n )); then
+                osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Right" of menu "File" of menu bar 1' >/dev/null 2>&1
+                sleep 0.4
+                send_ghostty_command "${agent_cmds[$i]}"
+            fi
+        else
+            # Portrait: prefer 3 rows x 2 columns
+            # Create column 1: 1 over 2 over 3
+            osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Down" of menu "File" of menu bar 1' >/dev/null 2>&1
+            sleep 0.4
+            send_ghostty_command "${agent_cmds[$((i++))]}"
+            osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Down" of menu "File" of menu bar 1' >/dev/null 2>&1
+            sleep 0.4
+            send_ghostty_command "${agent_cmds[$((i++))]}"
+
+            # Navigate back to top, split right
+            osascript -e 'tell application "System Events" to tell process "Ghostty" to key code 126 using {command down, option down}' >/dev/null 2>&1
+            sleep 0.2
+            osascript -e 'tell application "System Events" to tell process "Ghostty" to key code 126 using {command down, option down}' >/dev/null 2>&1
+            sleep 0.2
+            osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Right" of menu "File" of menu bar 1' >/dev/null 2>&1
+            sleep 0.4
+            send_ghostty_command "${agent_cmds[$((i++))]}"
+
+            # Split down if we have more
+            if (( i < n )); then
+                osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Down" of menu "File" of menu bar 1' >/dev/null 2>&1
+                sleep 0.4
+                send_ghostty_command "${agent_cmds[$((i++))]}"
+            fi
+            if (( i < n )); then
+                osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Down" of menu "File" of menu bar 1' >/dev/null 2>&1
+                sleep 0.4
+                send_ghostty_command "${agent_cmds[$i]}"
+            fi
+        fi
+    fi
+
+    # Equalize splits to make them all the same size
+    print_info "[DEBUG] Equalizing splits"
+    sleep 0.5
+    osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Equalize Splits" of menu 1 of menu item "Resize Split" of menu "Window" of menu bar 1' 2>&1 | head -3
+    local eq_rc=$?
+    print_info "[DEBUG] Equalize splits exit code: $eq_rc"
+
+    print_success "Created $n agent splits in Ghostty with commands launched"
+    print_info "[DEBUG] run_multi_agents_ghostty returning 0"
+    return 0
 }
 
 # Launch multiple agents in panes/tabs with per-agent worktrees
@@ -493,7 +772,39 @@ run_multi_agents() {
         return 0
     fi
 
-    if [[ "$mux" == tmux ]]; then
+    if [[ "$mux" == ghostty ]]; then
+        print_info "Using Ghostty native splits for $n agents"
+        print_info "[DEBUG] Building wrapped commands for $n agents"
+
+        # Build shell wrapper commands that cd to the worktree and run the agent
+        # Use ; instead of && for shell compatibility (elvish, fish, etc.)
+        local -a wrapped_cmds=()
+        local i
+        for i in "${!agent_cmds[@]}"; do
+            local cd_cmd="cd $(printf %q "${agent_paths[$i]}"); ${agent_cmds[$i]}"
+            print_info "[DEBUG] Wrapped command $i: $cd_cmd"
+            wrapped_cmds+=("$cd_cmd")
+        done
+
+        # Call Ghostty-specific implementation
+        print_info "[DEBUG] Calling run_multi_agents_ghostty with ${#wrapped_cmds[@]} commands"
+        run_multi_agents_ghostty "${wrapped_cmds[@]}"
+        local ghostty_rc=$?
+        print_info "[DEBUG] run_multi_agents_ghostty returned: $ghostty_rc"
+
+        # Inform user about worktrees (cannot auto-cleanup since Ghostty doesn't block)
+        print_info "Agents running in worktrees:"
+        local j
+        for j in "${!agent_branches[@]}"; do
+            print_info "  ${clean_agents[$j]}: ${agent_paths[$j]} (branch: ${agent_branches[$j]})"
+        done
+        print_warning "Worktrees will not be auto-cleaned. Close splits when done, then run:"
+        print_info "  yolo-cleanup  # (or manually: git worktree remove & git branch -D)"
+
+        print_info "[DEBUG] run_multi_agents returning 0 from ghostty block"
+        return 0
+
+    elif [[ "$mux" == tmux ]]; then
         local session="yolo-$(date +%s)"
         # Start detached session sized to current terminal, first pane at first agent path
         tmux new-session -d -s "$session" -x "$cols" -y "$rows" -c "${agent_paths[0]}"
