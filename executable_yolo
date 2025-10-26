@@ -750,7 +750,7 @@ main() {
     # Multi-agent mode: if comma-separated list given, launch via tmux/zellij
     if [[ "$command_name" == *","* ]]; then
         # In multi-agent mode, we always create per-agent worktrees regardless of -w
-        run_multi_agents "$command_name" "$dry_run" "$auto_clean" "${command_args[@]}"
+        run_multi_agents "$command_name" "$dry_run" "$auto_clean" "${command_args[@]+"${command_args[@]}"}"
         exit $?
     fi
 
@@ -833,7 +833,9 @@ main() {
             ;;
         droid)
             # droid: pass prompt positionally; no special flags
-            full_command+=("${command_args[@]}")
+            if (( ${#command_args[@]} )); then
+                full_command+=("${command_args[@]}")
+            fi
             ;;
         *)
             if [[ -n "$flags" ]]; then
@@ -841,7 +843,9 @@ main() {
                 local flag_array=($flags)
                 full_command+=("${flag_array[@]}")
             fi
-            full_command+=("${command_args[@]}")
+            if (( ${#command_args[@]} )); then
+                full_command+=("${command_args[@]}")
+            fi
             ;;
     esac
 
