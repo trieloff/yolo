@@ -18,9 +18,11 @@ Part of the **AI-Aligned** toolchain:
 - 🚀 **Quick Launch**: Simple wrapper to launch AI tools with one command
 - 🎯 **Smart Flags**: Automatically adds appropriate bypass flags for each AI tool
 - 🎲 **Full YOLO Mode**: Run without arguments to randomly select an installed agent
+- 🎭 **Multi-Agent Mode**: Launch multiple agents in parallel with split panes
+- 🪟 **Ghostty Support**: Native split pane support for Ghostty terminal
 - 🌳 **Worktree Isolation**: Optional `-w` flag creates isolated git worktrees
 - 🔒 **Safe Experimentation**: Work in isolated environments without affecting main codebase
-- 🧹 **Clean History**: Separate branches for each agent session with timestamps
+- 🧹 **Clean History**: Separate branches for each agent session
 - 🧽 **Mop Command**: Clean up all worktrees, branches, and processes with one command
 - 🛠️ **Shell Agnostic**: Works in bash, zsh, fish, elvish, and more
 
@@ -79,7 +81,7 @@ yolo -w
 yolo --dry-run
 ```
 
-When you run `yolo` without specifying a command, it scans your system for all installed supported coding agents (codex, claude, copilot, droid, amp, cursor-agent, opencode) and picks one at random. You only live yolo - even choosing your AI assistant is too much commitment!
+When you run `yolo` without specifying a command, it scans your system for all installed supported coding agents (codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini) and picks one at random. You only live yolo - even choosing your AI assistant is too much commitment!
 
 ### Basic Usage
 
@@ -93,6 +95,30 @@ yolo codex "implement feature X"
 # Launch Copilot with --allow-all-tools --allow-all-paths
 yolo copilot chat
 ```
+
+### Multi-Agent Mode
+
+Launch multiple AI agents in parallel, each in its own split pane and isolated worktree:
+
+```bash
+# Launch 3 agents in parallel with the same prompt
+yolo codex,claude,gemini "build a devcontainer and run tests"
+
+# Launch up to 9 agents at once
+yolo codex,claude,cursor-agent,opencode,amp,droid,copilot,gemini "say your name"
+
+# Each agent gets:
+# - Its own split pane (in Ghostty, zellij, or tmux)
+# - Its own isolated git worktree in .yolo/<agent>-N
+# - The same prompt/task
+```
+
+**Multiplexer Support:**
+- **Ghostty** (preferred): Native split support with optimal grid layouts (2-9 agents)
+- **Zellij**: Dynamic KDL layouts with proper grid organization
+- **Tmux**: Tiled layout with split windows
+
+The tool automatically detects which multiplexer you have and uses the best available option. In Ghostty, splits are automatically cleaned up when agents exit.
 
 ### Worktree Mode
 
@@ -149,9 +175,10 @@ Use `--mop` to clean up orphaned worktrees from interrupted sessions or when you
 | `codex` | `--dangerously-bypass-approvals-and-sandbox` |
 | `claude` | `--dangerously-skip-permissions` |
 | `copilot` | `--allow-all-tools --allow-all-paths` |
-| `droid` | `--skip-permissions-unsafe` |
+| `droid` | *(no flags - prompt allowed positionally)* |
 | `amp` | `--dangerously-allow-all` |
 | `cursor-agent` | `--force` |
+| `gemini` | `--yolo` (+ `-i` when prompt present) |
 | `opencode` | *(no flags)* |
 | *(other)* | `--yolo` |
 
@@ -186,9 +213,8 @@ yolo --dry-run  # See which agent would be selected
 yolo --dry-run claude "test changes"
 yolo -n codex  # Short form
 
-# Quick cleanup (from repository root)
-git worktree remove .conductor/<agent>-<YYYYMMDD-HHMMSS>
-git branch -D yolo/<agent>/<YYYYMMDD-HHMMSS>
+# Cleanup all worktrees at once
+yolo --mop
 ```
 
 ## How It Works
@@ -202,7 +228,7 @@ When you run `yolo` without specifying a command:
 yolo
 
 # YOLO does:
-# 1. Scans PATH for installed agents (codex, claude, copilot, droid, amp, cursor-agent, opencode)
+# 1. Scans PATH for installed agents (codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini)
 # 2. Picks one at random using $RANDOM
 # 3. Adds appropriate flags for that agent
 # 4. Launches it
@@ -234,10 +260,10 @@ When you use `-w` or `--worktree`:
 yolo -w claude "big refactor"
 
 # YOLO does:
-# 1. Creates .conductor/ directory
+# 1. Creates .yolo/ directory
 # 2. Finds lowest available number (e.g., 1)
 # 3. Creates branch: claude-1
-# 4. Creates worktree: .conductor/claude-1
+# 4. Creates worktree: .yolo/claude-1
 # 5. cd to worktree
 # 6. Runs: claude --dangerously-skip-permissions "big refactor"
 ```
@@ -267,7 +293,7 @@ yolo -w claude "fix the memory leak"
 ### Clean Separation
 ```
 your-repo/
-├── .conductor/
+├── .yolo/
 │   ├── claude-1/   # Session 1
 │   ├── claude-2/   # Session 2
 │   └── codex-1/    # Session 3
@@ -293,23 +319,22 @@ Manual cleanup if needed:
 
 ```bash
 # Remove a specific worktree
-git worktree remove .conductor/claude-1
+git worktree remove .yolo/claude-1
 
 # Delete the associated branch
 git branch -D claude-1
 
-# Or clean up all worktrees at once
-rm -rf .conductor
-git worktree prune
+# Or clean up all worktrees at once with mop
+yolo --mop
 
 # List all worktrees to see what's active
 git worktree list
 ```
 
-**Tip**: Add `.conductor/` to your `.gitignore` to keep worktree directories out of your repository:
+**Tip**: Add `.yolo/` to your `.gitignore` to keep worktree directories out of your repository:
 
 ```bash
-echo "/.conductor/" >> .gitignore
+echo "/.yolo/" >> .gitignore
 ```
 
 ## Configuration
