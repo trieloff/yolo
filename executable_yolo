@@ -62,6 +62,16 @@ print_success() {
     fi
 }
 
+print_debug() {
+    if [[ "${YOLO_DEBUG:-false}" == "true" ]]; then
+        if [[ "$USE_COLOR" == "true" ]]; then
+            echo -e "${BLUE}[DEBUG] $*${NC}" >&2
+        else
+            echo "[DEBUG] $*" >&2
+        fi
+    fi
+}
+
 # Show usage information
 show_usage() {
     cat << EOF
@@ -74,7 +84,6 @@ Options:
   -c, --clean       Automatically clean up worktree after command completes
   -nc, --no-clean   Preserve worktree after command completes (no prompt)
   -n, --dry-run     Show what would be executed without running it
-  -s, --split-only N  Test mode: create N empty Ghostty splits without running commands
   -m, --mop         Clean up all YOLO worktrees, branches, and processes
   -h, --help        Show this help message
   -v, --version     Show version information
@@ -110,7 +119,6 @@ Examples:
   yolo -w -c claude "experiment"   # Create worktree, auto-cleanup after
   yolo -w -nc claude "keep this"   # Create worktree, preserve it after
   yolo copilot chat                # Run copilot chat with safety flags disabled
-  yolo -s 8                        # Test mode: create 8 empty Ghostty splits
 
 Worktree Mode:
   When using -w/--worktree flag:
@@ -405,12 +413,12 @@ convert_to_typeable() {
 # Send command to current Ghostty split via AppleScript
 send_ghostty_command() {
     local cmd="$1"
-    print_info "[DEBUG] Sending command to split: $cmd"
+    print_debug ""Sending command to split: $cmd"
 
     # Convert backslash-escaped format to typeable format
     local typeable_cmd
     typeable_cmd="$(convert_to_typeable "$cmd")"
-    print_info "[DEBUG] Converted to typeable: $typeable_cmd"
+    print_debug "Converted to typeable: $typeable_cmd"
 
     # Escape for AppleScript: both backslashes and quotes need escaping
     # This ensures AppleScript can parse the string literal correctly
@@ -419,14 +427,14 @@ send_ghostty_command() {
     escaped_cmd="${escaped_cmd//\"/\\\"}"    # Escape quotes: " -> \"
 
     # Type the command and press return
-    print_info "[DEBUG] AppleScript escaped: $escaped_cmd"
+    print_debug "AppleScript escaped: $escaped_cmd"
     osascript -e "tell application \"System Events\" to tell process \"Ghostty\" to keystroke \"$escaped_cmd\"" 2>&1 | head -3
     local rc1=$?
-    print_info "[DEBUG] keystroke exit code: $rc1"
+    print_debug "keystroke exit code: $rc1"
     sleep 0.1
     osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke return' 2>&1 | head -3
     local rc2=$?
-    print_info "[DEBUG] return key exit code: $rc2"
+    print_debug "return key exit code: $rc2"
     return 0
 }
 
@@ -462,10 +470,10 @@ test_ghostty_splits() {
 
 # Launch multiple agents in Ghostty splits with per-agent worktrees
 run_multi_agents_ghostty() {
-    print_info "[DEBUG] run_multi_agents_ghostty called with ${#@} arguments"
+    print_debug "run_multi_agents_ghostty called with ${#@} arguments"
     local -a agent_cmds=("$@")
     local n=${#agent_cmds[@]}
-    print_info "[DEBUG] Number of agent commands: $n"
+    print_debug "Number of agent commands: $n"
 
     if (( n < 1 )); then
         print_error "no agent commands provided"
@@ -487,12 +495,12 @@ run_multi_agents_ghostty() {
     fi
 
     print_info "Creating Ghostty splits for $n agents (terminal: ${cols}x${rows})"
-    print_info "[DEBUG] Orientation: landscape=$is_landscape"
+    print_debug "Orientation: landscape=$is_landscape"
 
     local i=0
 
     # First agent in current split
-    print_info "[DEBUG] Sending first command (agent $i)"
+    print_debug "Sending first command (agent $i)"
     send_ghostty_command "${agent_cmds[$i]}"
     ((i++))
 
@@ -510,23 +518,23 @@ run_multi_agents_ghostty() {
         send_ghostty_command "${agent_cmds[$i]}"
 
     elif (( n == 3 )); then
-        print_info "[DEBUG] Creating 3-agent layout"
+        print_debug "Creating 3-agent layout"
         if [[ "$is_landscape" == "true" ]]; then
             # Landscape: 1|2|3 (three columns)
-            print_info "[DEBUG] Creating first split right"
+            print_debug "Creating first split right"
             osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Right" of menu "File" of menu bar 1' 2>&1 | head -3
             local rc=$?
-            print_info "[DEBUG] Split Right #1 exit code: $rc"
+            print_debug "Split Right #1 exit code: $rc"
             sleep 0.4
-            print_info "[DEBUG] Sending second command (agent $i)"
+            print_debug "Sending second command (agent $i)"
             send_ghostty_command "${agent_cmds[$((i++))]}"
 
-            print_info "[DEBUG] Creating second split right"
+            print_debug "Creating second split right"
             osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Right" of menu "File" of menu bar 1' 2>&1 | head -3
             rc=$?
-            print_info "[DEBUG] Split Right #2 exit code: $rc"
+            print_debug "Split Right #2 exit code: $rc"
             sleep 0.4
-            print_info "[DEBUG] Sending third command (agent $i)"
+            print_debug "Sending third command (agent $i)"
             send_ghostty_command "${agent_cmds[$i]}"
         else
             # Portrait: 1 over 2 over 3 (three rows)
@@ -570,7 +578,7 @@ run_multi_agents_ghostty() {
             # Use compute_grid_for_n to get dimensions
             read -r rows cols < <(compute_grid_for_n "$n")
 
-            print_info "[DEBUG] Creating ${rows}x${cols} grid for $n agents"
+            print_debug "Creating ${rows}x${cols} grid for $n agents"
 
             # Create first row by splitting right (cols-1) times
             local splits_right=$((cols - 1))
@@ -613,7 +621,7 @@ run_multi_agents_ghostty() {
             # Swap for portrait
             local tmp=$rows; rows=$cols; cols=$tmp
 
-            print_info "[DEBUG] Creating ${rows}x${cols} grid for $n agents (portrait)"
+            print_debug "Creating ${rows}x${cols} grid for $n agents (portrait)"
 
             # Create first column by splitting down (rows-1) times
             local splits_down=$((rows - 1))
@@ -652,14 +660,14 @@ run_multi_agents_ghostty() {
     fi
 
     # Equalize splits to make them all the same size
-    print_info "[DEBUG] Equalizing splits"
+    print_debug "Equalizing splits"
     sleep 0.5
     osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Equalize Splits" of menu 1 of menu item "Resize Split" of menu "Window" of menu bar 1' 2>&1 | head -3
     local eq_rc=$?
-    print_info "[DEBUG] Equalize splits exit code: $eq_rc"
+    print_debug "Equalize splits exit code: $eq_rc"
 
     print_success "Created $n agent splits in Ghostty with commands launched"
-    print_info "[DEBUG] run_multi_agents_ghostty returning 0"
+    print_debug "run_multi_agents_ghostty returning 0"
     return 0
 }
 
@@ -838,7 +846,7 @@ run_multi_agents() {
 
     if [[ "$mux" == ghostty ]]; then
         print_info "Using Ghostty native splits for $n agents"
-        print_info "[DEBUG] Building wrapped commands for $n agents"
+        print_debug "Building wrapped commands for $n agents"
 
         # Get repo root for cleanup
         local repo_root
@@ -863,15 +871,15 @@ run_multi_agents() {
             # Create wrapped command: cd to worktree, run agent, then cleanup
             local wrapped="cd $(printf %q "$worktree_path"); ${agent_cmds[$i]}; $cleanup_script"
 
-            print_info "[DEBUG] Wrapped command $i: $wrapped"
+            print_debug "Wrapped command $i: $wrapped"
             wrapped_cmds+=("$wrapped")
         done
 
         # Call Ghostty-specific implementation
-        print_info "[DEBUG] Calling run_multi_agents_ghostty with ${#wrapped_cmds[@]} commands"
+        print_debug "Calling run_multi_agents_ghostty with ${#wrapped_cmds[@]} commands"
         run_multi_agents_ghostty "${wrapped_cmds[@]}"
         local ghostty_rc=$?
-        print_info "[DEBUG] run_multi_agents_ghostty returned: $ghostty_rc"
+        print_debug "run_multi_agents_ghostty returned: $ghostty_rc"
 
         # Inform user about automatic cleanup
         print_info "Agents running in worktrees (auto-cleanup enabled):"
@@ -881,7 +889,7 @@ run_multi_agents() {
         done
         print_success "When you exit an agent, its worktree will be automatically cleaned up"
 
-        print_info "[DEBUG] run_multi_agents returning 0 from ghostty block"
+        print_debug "run_multi_agents returning 0 from ghostty block"
         return 0
 
     elif [[ "$mux" == tmux ]]; then
