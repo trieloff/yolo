@@ -475,6 +475,21 @@ git commit -m "Initial commit"
 
 YOLO adds flags to commands. If your command already has conflicting flags, they may clash. In that case, call the command directly without YOLO.
 
+## Supported AI Coding Agents
+
+YOLO works with the following AI coding assistants:
+
+| Agent | Repository | Description |
+|-------|-----------|-------------|
+| **Codex** | [github.com/openai/codex](https://github.com/openai/codex) | OpenAI's lightweight coding agent for your terminal |
+| **Claude Code** | [github.com/anthropics/claude-code](https://github.com/anthropics/claude-code) | Anthropic's agentic coding tool with git workflow support |
+| **Copilot** | [github.com/github/copilot-cli](https://github.com/github/copilot-cli) | GitHub's AI pair programmer for the command line |
+| **Droid** | [docs.factory.ai](https://docs.factory.ai) | Factory AI's coding agent with specialized droids |
+| **Amp** | [ampcode.com](https://ampcode.com) / [sourcegraph.com/amp](https://sourcegraph.com/amp) | Sourcegraph's frontier coding agent |
+| **Cursor Agent** | [cursor.com/cli](https://cursor.com/cli) | Cursor's headless CLI agent |
+| **OpenCode** | [github.com/sst/opencode](https://github.com/sst/opencode) | Open-source AI coding agent for the terminal |
+| **Gemini** | [github.com/google-gemini/gemini-cli](https://github.com/google-gemini/gemini-cli) | Google's open-source AI agent with Gemini 2.5 Pro |
+
 ## Related Projects
 
 - [ai-aligned-git](https://github.com/trieloff/ai-aligned-git) - Constrains AI tools to safer git practices
