@@ -74,6 +74,7 @@ Options:
   -c, --clean       Automatically clean up worktree after command completes
   -nc, --no-clean   Preserve worktree after command completes (no prompt)
   -n, --dry-run     Show what would be executed without running it
+  -s, --split-only N  Test mode: create N empty Ghostty splits without running commands
   -m, --mop         Clean up all YOLO worktrees, branches, and processes
   -h, --help        Show this help message
   -v, --version     Show version information
@@ -109,6 +110,7 @@ Examples:
   yolo -w -c claude "experiment"   # Create worktree, auto-cleanup after
   yolo -w -nc claude "keep this"   # Create worktree, preserve it after
   yolo copilot chat                # Run copilot chat with safety flags disabled
+  yolo -s 8                        # Test mode: create 8 empty Ghostty splits
 
 Worktree Mode:
   When using -w/--worktree flag:
@@ -166,12 +168,12 @@ create_worktree() {
     # Find the lowest available number for this agent
     local agent_number=1
     while git rev-parse --verify "$command_name-$agent_number" >/dev/null 2>&1 || \
-          [[ -d "$conductor_dir/$command_name-$agent_number" ]]; do
+          [[ -d "$yolo_dir/$command_name-$agent_number" ]]; do
         ((agent_number++))
     done
 
     YOLO_BRANCH_NAME="$command_name-$agent_number"
-    YOLO_WORKTREE_PATH="$conductor_dir/$command_name-$agent_number"
+    YOLO_WORKTREE_PATH="$yolo_dir/$command_name-$agent_number"
 
     print_info "Creating worktree at $YOLO_WORKTREE_PATH with branch $YOLO_BRANCH_NAME"
 
@@ -428,6 +430,36 @@ send_ghostty_command() {
     return 0
 }
 
+# Test mode: create N empty Ghostty splits
+test_ghostty_splits() {
+    local n="$1"
+
+    if (( n < 2 || n > 9 )); then
+        print_error "split count must be between 2 and 9"
+        return 1
+    fi
+
+    if ! is_ghostty; then
+        print_error "not running in Ghostty terminal"
+        return 1
+    fi
+
+    print_info "Creating $n empty Ghostty splits for testing..."
+
+    # Create dummy commands (just echo with split number)
+    local -a dummy_cmds=()
+    local i
+    for i in $(seq 1 "$n"); do
+        dummy_cmds+=("echo Split $i")
+    done
+
+    # Call the ghostty split logic
+    run_multi_agents_ghostty "${dummy_cmds[@]}"
+
+    print_success "Created $n splits. Check the layout!"
+    return 0
+}
+
 # Launch multiple agents in Ghostty splits with per-agent worktrees
 run_multi_agents_ghostty() {
     print_info "[DEBUG] run_multi_agents_ghostty called with ${#@} arguments"
@@ -441,9 +473,9 @@ run_multi_agents_ghostty() {
     fi
 
     # Ghostty has a practical limit for splits
-    if (( n > 6 )); then
-        print_warning "more than 6 agents; limiting to 6 for Ghostty"
-        n=6
+    if (( n > 9 )); then
+        print_warning "more than 9 agents; limiting to 9 for Ghostty"
+        n=9
     fi
 
     # Detect terminal orientation
@@ -531,67 +563,91 @@ run_multi_agents_ghostty() {
         send_ghostty_command "${agent_cmds[$i]}"
 
     elif (( n >= 5 )); then
-        # 5-6 agents: create grid based on orientation
+        # 5-9 agents: generalized grid layout
         if [[ "$is_landscape" == "true" ]]; then
-            # Landscape: prefer 2 rows x 3 columns
-            # Row 1: 1|2|3
-            osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Right" of menu "File" of menu bar 1' >/dev/null 2>&1
-            sleep 0.4
-            send_ghostty_command "${agent_cmds[$((i++))]}"
-            osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Right" of menu "File" of menu bar 1' >/dev/null 2>&1
-            sleep 0.4
-            send_ghostty_command "${agent_cmds[$((i++))]}"
+            # Landscape: calculate optimal rows x cols
+            local rows cols
+            # Use compute_grid_for_n to get dimensions
+            read -r rows cols < <(compute_grid_for_n "$n")
 
-            # Navigate back to leftmost, split down
-            osascript -e 'tell application "System Events" to tell process "Ghostty" to key code 123 using {command down, option down}' >/dev/null 2>&1
-            sleep 0.2
-            osascript -e 'tell application "System Events" to tell process "Ghostty" to key code 123 using {command down, option down}' >/dev/null 2>&1
-            sleep 0.2
-            osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Down" of menu "File" of menu bar 1' >/dev/null 2>&1
-            sleep 0.4
-            send_ghostty_command "${agent_cmds[$((i++))]}"
+            print_info "[DEBUG] Creating ${rows}x${cols} grid for $n agents"
 
-            # Split right if we have more
-            if (( i < n )); then
+            # Create first row by splitting right (cols-1) times
+            local splits_right=$((cols - 1))
+            for ((j=0; j<splits_right; j++)); do
                 osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Right" of menu "File" of menu bar 1' >/dev/null 2>&1
                 sleep 0.4
-                send_ghostty_command "${agent_cmds[$((i++))]}"
-            fi
-            if (( i < n )); then
-                osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Right" of menu "File" of menu bar 1' >/dev/null 2>&1
-                sleep 0.4
-                send_ghostty_command "${agent_cmds[$i]}"
-            fi
+                if (( i < n )); then
+                    send_ghostty_command "${agent_cmds[$((i++))]}"
+                fi
+            done
+
+            # Now create remaining rows by splitting down at each column position
+            # We're currently at the rightmost column
+            # For each column (right to left), split down (rows-1) times
+            local remaining_rows=$((rows - 1))
+            for ((col=0; col<cols; col++)); do
+                # At this column, split down for each remaining row
+                for ((row=0; row<remaining_rows; row++)); do
+                    if (( i >= n )); then
+                        break 2  # Exit both loops if we've placed all agents
+                    fi
+
+                    # Split down at current position
+                    osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Down" of menu "File" of menu bar 1' >/dev/null 2>&1
+                    sleep 0.4
+                    send_ghostty_command "${agent_cmds[$((i++))]}"
+                done
+
+                # Move left to next column (except after the last column)
+                if (( col < cols - 1 )); then
+                    osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Select Split Left" of menu 1 of menu item "Select Split" of menu "Window" of menu bar 1' >/dev/null 2>&1
+                    sleep 0.2
+                fi
+            done
+
         else
-            # Portrait: prefer 3 rows x 2 columns
-            # Create column 1: 1 over 2 over 3
-            osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Down" of menu "File" of menu bar 1' >/dev/null 2>&1
-            sleep 0.4
-            send_ghostty_command "${agent_cmds[$((i++))]}"
-            osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Down" of menu "File" of menu bar 1' >/dev/null 2>&1
-            sleep 0.4
-            send_ghostty_command "${agent_cmds[$((i++))]}"
+            # Portrait: calculate optimal cols x rows (swap dimensions)
+            local rows cols
+            read -r rows cols < <(compute_grid_for_n "$n")
+            # Swap for portrait
+            local tmp=$rows; rows=$cols; cols=$tmp
 
-            # Navigate back to top, split right
-            osascript -e 'tell application "System Events" to tell process "Ghostty" to key code 126 using {command down, option down}' >/dev/null 2>&1
-            sleep 0.2
-            osascript -e 'tell application "System Events" to tell process "Ghostty" to key code 126 using {command down, option down}' >/dev/null 2>&1
-            sleep 0.2
-            osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Right" of menu "File" of menu bar 1' >/dev/null 2>&1
-            sleep 0.4
-            send_ghostty_command "${agent_cmds[$((i++))]}"
+            print_info "[DEBUG] Creating ${rows}x${cols} grid for $n agents (portrait)"
 
-            # Split down if we have more
-            if (( i < n )); then
+            # Create first column by splitting down (rows-1) times
+            local splits_down=$((rows - 1))
+            for ((j=0; j<splits_down; j++)); do
                 osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Down" of menu "File" of menu bar 1' >/dev/null 2>&1
                 sleep 0.4
-                send_ghostty_command "${agent_cmds[$((i++))]}"
-            fi
-            if (( i < n )); then
-                osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Down" of menu "File" of menu bar 1' >/dev/null 2>&1
-                sleep 0.4
-                send_ghostty_command "${agent_cmds[$i]}"
-            fi
+                if (( i < n )); then
+                    send_ghostty_command "${agent_cmds[$((i++))]}"
+                fi
+            done
+
+            # Now create remaining columns by splitting right at each row position
+            # We're currently at the bottommost row
+            # For each row (bottom to top), split right (cols-1) times
+            local remaining_cols=$((cols - 1))
+            for ((row=0; row<rows; row++)); do
+                # At this row, split right for each remaining column
+                for ((col=0; col<remaining_cols; col++)); do
+                    if (( i >= n )); then
+                        break 2
+                    fi
+
+                    # Split right at current position
+                    osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Right" of menu "File" of menu bar 1' >/dev/null 2>&1
+                    sleep 0.4
+                    send_ghostty_command "${agent_cmds[$((i++))]}"
+                done
+
+                # Move up to next row (except after the last row)
+                if (( row < rows - 1 )); then
+                    osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Select Split Up" of menu 1 of menu item "Select Split" of menu "Window" of menu bar 1' >/dev/null 2>&1
+                    sleep 0.2
+                fi
+            done
         fi
     fi
 
@@ -1154,6 +1210,15 @@ main() {
             -m|--mop)
                 mop_cleanup
                 exit 0
+                ;;
+            -s|--split-only)
+                shift
+                if [[ -z "$1" || ! "$1" =~ ^[0-9]+$ ]]; then
+                    print_error "--split-only requires a number argument"
+                    exit 1
+                fi
+                test_ghostty_splits "$1"
+                exit $?
                 ;;
             -*)
                 print_error "unknown option: $1"
