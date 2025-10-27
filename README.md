@@ -6,12 +6,14 @@
 
 YOLO is a command-line wrapper for AI coding assistants that automatically adds the appropriate bypass/danger flags and optionally creates isolated git worktrees for agent sessions.
 
-Part of the **AI-Aligned** toolchain:
+Part of the **[AI Ecoverse](https://github.com/trieloff/ai-ecoverse)** - a comprehensive ecosystem of tools for AI-assisted development:
 - [ai-aligned-git](https://github.com/trieloff/ai-aligned-git) - Git wrapper for safe AI commit practices
 - [ai-aligned-gh](https://github.com/trieloff/ai-aligned-gh) - GitHub CLI wrapper for proper AI attribution
 - **yolo** - AI CLI launcher with worktree isolation (this project)
- - [vibe-coded-badge-action](https://github.com/trieloff/vibe-coded-badge-action) - Badge showing AI-generated code percentage
- - [gh-workflow-peek](https://github.com/trieloff/gh-workflow-peek) - Smarter GitHub Actions log filtering
+- [vibe-coded-badge-action](https://github.com/trieloff/vibe-coded-badge-action) - Badge showing AI-generated code percentage
+- [gh-workflow-peek](https://github.com/trieloff/gh-workflow-peek) - Smarter GitHub Actions log filtering
+- [upskill](https://github.com/trieloff/upskill) - Install Claude/Agent skills from other repositories
+- [as-a-bot](https://github.com/trieloff/as-a-bot) - GitHub App token broker for proper AI attribution
 
 ## Features
 
