@@ -375,6 +375,31 @@ join_escaped() {
     echo "$out"
 }
 
+# Join command array for typing into a shell (not executing via shell)
+# Arguments containing spaces/special chars are wrapped in quotes
+# This is for Ghostty where commands are typed, not executed
+join_for_typing() {
+    local out=""
+    local i
+    for i in "$@"; do
+        local escaped="$i"
+        # If arg contains spaces, quotes, backticks, or special chars, wrap in quotes
+        if [[ "$i" =~ [[:space:]\'\"\`\$\(\)] ]]; then
+            # Escape internal quotes and backslashes for shell
+            escaped="${i//\\/\\\\}"        # \ -> \\
+            escaped="${escaped//\"/\\\"}"  # " -> \"
+            escaped="\"$escaped\""         # wrap in quotes
+        fi
+
+        if [[ -z "$out" ]]; then
+            out="$escaped"
+        else
+            out+=" $escaped"
+        fi
+    done
+    echo "$out"
+}
+
 # Escape a string for safe inclusion in simple KDL string literals
 kdl_escape() {
     local s="$1"
@@ -796,7 +821,12 @@ run_multi_agents() {
         if [[ -n "$shell_cmd" ]]; then
             agent_cmds+=("$shell_cmd")
         else
-            agent_cmds+=("$(join_escaped "${cmd_arr[@]}")")
+            # Use join_for_typing for Ghostty (commands are typed), join_escaped for others (shell execution)
+            if [[ "$mux" == "ghostty" ]]; then
+                agent_cmds+=("$(join_for_typing "${cmd_arr[@]}")")
+            else
+                agent_cmds+=("$(join_escaped "${cmd_arr[@]}")")
+            fi
         fi
     done
 
