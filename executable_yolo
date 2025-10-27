@@ -1345,10 +1345,32 @@ main() {
     fi
 
     # Multi-agent mode: if comma-separated list given, launch via tmux/zellij
+    # Only treat as multi-agent if it looks like agent names, not a prompt
     if [[ "$command_name" == *","* ]]; then
-        # In multi-agent mode, we always create per-agent worktrees regardless of -w
-        run_multi_agents "$command_name" "$dry_run" "$auto_clean" "${command_args[@]+"${command_args[@]}"}"
-        exit $?
+        # Check if this looks like a list of agents vs a prompt with commas
+        local looks_like_agents=true
+        IFS=',' read -ra potential_agents <<< "$command_name"
+        for agent in "${potential_agents[@]}"; do
+            agent=$(echo "$agent" | xargs)  # trim whitespace
+            # If any segment has spaces or doesn't look like a command, it's likely a prompt
+            if [[ "$agent" == *" "* ]] || ! command_exists "$agent"; then
+                looks_like_agents=false
+                break
+            fi
+        done
+        
+        if [[ "$looks_like_agents" == "true" ]]; then
+            # In multi-agent mode, we always create per-agent worktrees regardless of -w
+            run_multi_agents "$command_name" "$dry_run" "$auto_clean" "${command_args[@]+"${command_args[@]}"}"
+            exit $?
+        else
+            # It's a prompt with commas, treat as full YOLO mode
+            print_info "Full YOLO mode activated! Picking a random coding agent..."
+            command_args=("$command_name")
+            command_name="$(pick_random_agent)" || exit 1
+            print_success "Selected: $command_name"
+            print_info ""
+        fi
     fi
 
     # Check if command exists
