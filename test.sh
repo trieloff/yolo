@@ -181,19 +181,19 @@ EOF
     # Test worktree creation (use -nc to avoid cleanup prompt in tests)
     local output
     if output=$(PATH="/tmp:$PATH" "$YOLO_CMD" -w -nc echo "test" 2>&1); then
-        if [[ -d "$test_repo/.conductor" ]]; then
-            print_pass "Worktree directory .conductor created"
+        if [[ -d "$test_repo/.yolo" ]]; then
+            print_pass "Worktree directory .yolo created"
 
             # Check if worktree was created
             local worktree_count
-            worktree_count=$(find "$test_repo/.conductor" -maxdepth 1 -type d -name "echo-*" | wc -l)
+            worktree_count=$(find "$test_repo/.yolo" -maxdepth 1 -type d -name "echo-*" | wc -l)
             if [[ $worktree_count -gt 0 ]]; then
-                print_pass "Worktree subdirectory created in .conductor"
+                print_pass "Worktree subdirectory created in .yolo"
             else
-                print_fail "No worktree subdirectory found in .conductor"
+                print_fail "No worktree subdirectory found in .yolo"
             fi
         else
-            print_fail ".conductor directory not created"
+            print_fail ".yolo directory not created"
         fi
     else
         print_fail "yolo -w failed: $output"
