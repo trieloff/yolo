@@ -158,6 +158,24 @@ get_repo_root() {
     git rev-parse --show-toplevel 2>/dev/null || echo "$PWD"
 }
 
+# Sanitize a name to be valid for git branch names
+# Removes/replaces invalid characters according to git-check-ref-format
+sanitize_branch_name() {
+    local name="$1"
+    # Replace spaces and special chars with hyphens
+    name="${name//[^a-zA-Z0-9._-]/-}"
+    # Remove consecutive hyphens
+    name="${name//-+/-}"
+    # Remove leading/trailing hyphens and dots
+    name="${name##[-.]}"
+    name="${name%%[-.]}"
+    # Ensure it's not empty
+    if [[ -z "$name" ]]; then
+        name="yolo-session"
+    fi
+    echo "$name"
+}
+
 # Create a git worktree for the command
 # Sets global variables: YOLO_BRANCH_NAME, YOLO_WORKTREE_PATH, YOLO_REPO_ROOT
 create_worktree() {
@@ -176,15 +194,19 @@ create_worktree() {
         print_info "Created .yolo directory"
     fi
 
+    # Sanitize the command name for use in branch names
+    local sanitized_name
+    sanitized_name="$(sanitize_branch_name "$command_name")"
+    
     # Find the lowest available number for this agent
     local agent_number=1
-    while git rev-parse --verify "$command_name-$agent_number" >/dev/null 2>&1 || \
-          [[ -d "$yolo_dir/$command_name-$agent_number" ]]; do
+    while git rev-parse --verify "$sanitized_name-$agent_number" >/dev/null 2>&1 || \
+          [[ -d "$yolo_dir/$sanitized_name-$agent_number" ]]; do
         ((agent_number++))
     done
 
-    YOLO_BRANCH_NAME="$command_name-$agent_number"
-    YOLO_WORKTREE_PATH="$yolo_dir/$command_name-$agent_number"
+    YOLO_BRANCH_NAME="$sanitized_name-$agent_number"
+    YOLO_WORKTREE_PATH="$yolo_dir/$sanitized_name-$agent_number"
 
     print_info "Creating worktree at $YOLO_WORKTREE_PATH with branch $YOLO_BRANCH_NAME"
 
@@ -214,7 +236,8 @@ get_command_flags() {
     # Check for environment-based flag override
     # e.g., YOLO_FLAGS_claude="--custom-flag"
     # Note: hyphens in command names are converted to underscores for env var
-    local env_var_name="${cmd//-/_}"
+    # Sanitize command name for use as environment variable
+    local env_var_name="${cmd//[^a-zA-Z0-9_]/_}"
     local env_var="YOLO_FLAGS_${env_var_name}"
     if [[ -n "${!env_var:-}" ]]; then
         echo "${!env_var}"
