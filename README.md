@@ -208,6 +208,7 @@ Use `--mop` to clean up orphaned worktrees from interrupted sessions or when you
 | `cursor-agent` | `--force` |
 | `gemini` | `--yolo` (+ `-i` when prompt present) |
 | `opencode` | *(no flags)* |
+| `qwen` | `--yolo` |
 | *(other)* | `--yolo` |
 
 ### Examples
@@ -262,7 +263,7 @@ When you run `yolo` without specifying a command:
 yolo
 
 # YOLO does:
-# 1. Scans PATH for installed agents (codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini)
+# 1. Scans PATH for installed agents (codex, claude, copilot, droid, amp, cursor-agent, opencode, qwen, gemini)
 # 2. Picks one at random using $RANDOM
 # 3. Adds appropriate flags for that agent
 # 4. Launches it
@@ -522,6 +523,7 @@ YOLO works with the following AI coding assistants:
 | **Amp** | [ampcode.com](https://ampcode.com) / [sourcegraph.com/amp](https://sourcegraph.com/amp) | Sourcegraph's frontier coding agent |
 | **Cursor Agent** | [cursor.com/cli](https://cursor.com/cli) | Cursor's headless CLI agent |
 | **OpenCode** | [github.com/sst/opencode](https://github.com/sst/opencode) | Open-source AI coding agent for the terminal |
+| **Qwen** | [github.com/QwenLM/Qwen](https://github.com/QwenLM/Qwen) | Alibaba's state-of-the-art large language model for coding |
 | **Gemini** | [github.com/google-gemini/gemini-cli](https://github.com/google-gemini/gemini-cli) | Google's open-source AI agent with Gemini 2.5 Pro |
 
 ## Related Projects

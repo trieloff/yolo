@@ -274,6 +274,10 @@ get_command_flags() {
             # opencode doesn't need extra flags
             echo ""
             ;;
+        qwen)
+            # qwen-specific bypass flag
+            echo "--yolo"
+            ;;
         *)
             echo "--yolo"
             ;;
@@ -288,7 +292,7 @@ command_exists() {
 # Get all installed supported coding agents
 get_installed_agents() {
     local agents=()
-    local supported_commands=("codex" "claude" "copilot" "droid" "amp" "cursor-agent" "opencode" "gemini")
+    local supported_commands=("codex" "claude" "copilot" "droid" "amp" "cursor-agent" "opencode" "qwen" "gemini")
 
     for cmd in "${supported_commands[@]}"; do
         if command_exists "$cmd"; then

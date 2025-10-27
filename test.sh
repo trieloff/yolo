@@ -15,6 +15,42 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+# Default per-command timeout (seconds) for tests
+YOLO_TEST_TIMEOUT="${YOLO_TEST_TIMEOUT:-30}"
+
+# Run a command with a timeout, portable across macOS/Linux
+# Usage: run_with_timeout SECONDS cmd [args...]
+run_with_timeout() {
+    local seconds="$1"; shift
+    # Prefer GNU/BSD timeout if available
+    if command -v timeout >/dev/null 2>&1; then
+        # Give a 5s grace period for cleanup before SIGKILL
+        timeout -k 5s "${seconds}s" "$@"
+        return $?
+    elif command -v gtimeout >/dev/null 2>&1; then
+        gtimeout -k 5s "${seconds}s" "$@"
+        return $?
+    fi
+
+    # Fallback pure-bash watchdog
+    "$@" &
+    local cmd_pid=$!
+    (
+        sleep "$seconds"
+        if kill -0 "$cmd_pid" 2>/dev/null; then
+            echo "Timeout after ${seconds}s: $*" >&2
+            kill -TERM "$cmd_pid" 2>/dev/null || true
+            sleep 2
+            kill -KILL "$cmd_pid" 2>/dev/null || true
+        fi
+    ) &
+    local watcher_pid=$!
+    wait "$cmd_pid"
+    local rc=$?
+    kill "$watcher_pid" 2>/dev/null || true
+    return $rc
+}
+
 # Test counters
 TESTS_RUN=0
 TESTS_PASSED=0
@@ -72,7 +108,7 @@ test_help_flag() {
     print_test_header "Test 2: Help Flag"
     run_test
 
-    if "$YOLO_CMD" --help >/dev/null 2>&1; then
+    if run_with_timeout "$YOLO_TEST_TIMEOUT" "$YOLO_CMD" --help >/dev/null 2>&1; then
         print_pass "yolo --help works"
     else
         print_fail "yolo --help failed"
@@ -84,7 +120,7 @@ test_version_flag() {
     print_test_header "Test 3: Version Flag"
     run_test
 
-    if "$YOLO_CMD" --version >/dev/null 2>&1; then
+    if run_with_timeout "$YOLO_TEST_TIMEOUT" "$YOLO_CMD" --version >/dev/null 2>&1; then
         print_pass "yolo --version works"
     else
         print_fail "yolo --version failed"
@@ -96,7 +132,7 @@ test_no_command_error() {
     print_test_header "Test 4: Error When No Command"
     run_test
 
-    if ! "$YOLO_CMD" 2>/dev/null; then
+    if ! run_with_timeout "$YOLO_TEST_TIMEOUT" "$YOLO_CMD" 2>/dev/null; then
         print_pass "yolo correctly errors when no command provided"
     else
         print_fail "yolo should error when no command provided"
@@ -115,6 +151,7 @@ test_command_flags() {
         "amp:--dangerously-allow-all"
         "cursor-agent:--force"
         "opencode:"  # no extra flags
+        "qwen:--yolo"
         "unknown-tool:--yolo"
     )
 
@@ -133,7 +170,7 @@ EOF
 
         # Use PATH to make the test command available
         local output
-        if output=$(PATH="/tmp:$PATH" YOLO_DEBUG=true "$YOLO_CMD" "$cmd" "test-arg" 2>&1); then
+        if output=$(PATH="/tmp:$PATH" YOLO_DEBUG=true run_with_timeout "$YOLO_TEST_TIMEOUT" "$YOLO_CMD" "$cmd" "test-arg" 2>&1); then
             if echo "$output" | grep -q "$expected_flag"; then
                 print_pass "yolo $cmd includes $expected_flag"
             else
@@ -180,7 +217,7 @@ EOF
 
     # Test worktree creation (use -nc to avoid cleanup prompt in tests)
     local output
-    if output=$(PATH="/tmp:$PATH" "$YOLO_CMD" -w -nc echo "test" 2>&1); then
+    if output=$(PATH="/tmp:$PATH" run_with_timeout "$YOLO_TEST_TIMEOUT" "$YOLO_CMD" -w -nc echo "test" 2>&1); then
         if [[ -d "$test_repo/.yolo" ]]; then
             print_pass "Worktree directory .yolo created"
 
@@ -224,7 +261,7 @@ EOF
     chmod +x "$echo_cmd"
 
     # Test that worktree fails outside git repo
-    if ! PATH="/tmp:$PATH" "$YOLO_CMD" -w echo "test" 2>/dev/null; then
+    if ! PATH="/tmp:$PATH" run_with_timeout "$YOLO_TEST_TIMEOUT" "$YOLO_CMD" -w echo "test" 2>/dev/null; then
         print_pass "yolo -w correctly errors outside git repository"
     else
         print_fail "yolo -w should error outside git repository"
@@ -254,7 +291,7 @@ EOF
 
     # Run yolo with multiple arguments (skip --yolo flag since command doesn't support it)
     local output
-    if output=$(PATH="/tmp:$PATH" "$YOLO_CMD" yolo_test_myecho "arg1" "arg with spaces" "arg3" 2>&1); then
+    if output=$(PATH="/tmp:$PATH" run_with_timeout "$YOLO_TEST_TIMEOUT" "$YOLO_CMD" yolo_test_myecho "arg1" "arg with spaces" "arg3" 2>&1); then
         if echo "$output" | grep -q "ARG: arg1" && \
            echo "$output" | grep -q "ARG: arg with spaces" && \
            echo "$output" | grep -q "ARG: arg3"; then
