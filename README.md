@@ -208,7 +208,7 @@ Use `--mop` to clean up orphaned worktrees from interrupted sessions or when you
 | `cursor-agent` | `--force` |
 | `gemini` | `--yolo` (+ `-i` when prompt present) |
 | `opencode` | *(no flags)* |
-| `qwen` | `--yolo` |
+| `qwen` | `--yolo` (+ `-i` when prompt present) |
 | *(other)* | `--yolo` |
 
 ### Examples

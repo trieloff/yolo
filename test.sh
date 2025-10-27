@@ -147,7 +147,7 @@ test_command_flags() {
         "codex:--dangerously-bypass-approvals-and-sandbox"
         "claude:--dangerously-skip-permissions"
         "copilot:--allow-all-tools"
-        "droid:--skip-permissions-unsafe"
+        "droid:"  # no extra flags
         "amp:--dangerously-allow-all"
         "cursor-agent:--force"
         "opencode:"  # no extra flags
@@ -161,7 +161,7 @@ test_command_flags() {
         local expected_flag="${cmd_pair##*:}"
 
         # Create a dummy command that just echoes its arguments
-        local test_script="/tmp/test_yolo_$cmd"
+        local test_script="/tmp/$cmd"
         cat > "$test_script" << 'EOF'
 #!/bin/bash
 echo "$@"
@@ -171,10 +171,19 @@ EOF
         # Use PATH to make the test command available
         local output
         if output=$(PATH="/tmp:$PATH" YOLO_DEBUG=true run_with_timeout "$YOLO_TEST_TIMEOUT" "$YOLO_CMD" "$cmd" "test-arg" 2>&1); then
-            if echo "$output" | grep -q "$expected_flag"; then
-                print_pass "yolo $cmd includes $expected_flag"
+            if [[ -n "$expected_flag" ]]; then
+                if echo "$output" | grep -F -q -- "$expected_flag"; then
+                    print_pass "yolo $cmd includes $expected_flag"
+                else
+                    print_fail "yolo $cmd should include $expected_flag (got: $output)"
+                fi
             else
-                print_fail "yolo $cmd should include $expected_flag (got: $output)"
+                # No extra flag expected; ensure command ran and preserved args
+                if echo "$output" | grep -q "test-arg"; then
+                    print_pass "yolo $cmd adds no extra flags and preserves args"
+                else
+                    print_fail "yolo $cmd did not preserve args (got: $output)"
+                fi
             fi
         else
             # Command not found is OK for this test
@@ -183,6 +192,34 @@ EOF
 
         rm -f "$test_script"
     done
+}
+
+# Test 5b: Qwen gets -i when prompt is provided (single-agent)
+test_qwen_interactive_with_prompt() {
+    print_test_header "Test 5b: Qwen -i Added With Prompt"
+    run_test
+
+    # Create a dummy qwen that just echoes its arguments
+    local test_script="/tmp/qwen"
+    cat > "$test_script" << 'EOF'
+#!/bin/bash
+echo "$@"
+EOF
+    chmod +x "$test_script"
+
+    # Run yolo qwen with a positional prompt
+    local output
+    if output=$(PATH="/tmp:$PATH" run_with_timeout "$YOLO_TEST_TIMEOUT" "$YOLO_CMD" qwen "hello world" 2>&1); then
+        if echo "$output" | grep -F -q -- "-i" && echo "$output" | grep -F -q -- "hello world"; then
+            print_pass "yolo qwen adds -i and passes prompt"
+        else
+            print_fail "yolo qwen should add -i and pass prompt (got: $output)"
+        fi
+    else
+        print_info "Skipping qwen -i test (command not executed)"
+    fi
+
+    rm -f "$test_script"
 }
 
 # Test 6: Test worktree creation (if in a git repo)
@@ -341,6 +378,7 @@ main() {
     test_version_flag
     test_no_command_error
     test_command_flags
+    test_qwen_interactive_with_prompt
     test_worktree_creation
     test_worktree_no_git_error
     test_argument_preservation

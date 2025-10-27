@@ -99,6 +99,7 @@ Supported Commands:
   amp               Adds --dangerously-allow-all
   cursor-agent      Adds --force
   gemini            Uses --yolo; adds -i when prompt present
+  qwen              Uses --yolo; adds -i when prompt present
   opencode          No extra flags added
   <other>           Adds --yolo (generic fallback)
 
@@ -382,82 +383,18 @@ kdl_escape() {
     echo "$s"
 }
 
-# Convert backslash-escaped string to a typeable command
-# Converts: say\ your\ name  →  "say your name" (adds quotes for multi-word args)
-# Converts: \"quoted\"  →  "quoted"
-convert_to_typeable() {
-    local cmd="$1"
-    local result=""
-    local word=""
-
-    # Parse word by word, tracking if we need quotes
-    local i=0
-    while [ $i -lt ${#cmd} ]; do
-        local char="${cmd:$i:1}"
-        local next_char="${cmd:$i+1:1}"
-
-        if [[ "$char" == "\\" ]]; then
-            case "$next_char" in
-                " "|","|"("|")"|'"'|"'")
-                    # Escaped character - this indicates the word needs quotes
-                    word+="$next_char"
-                    ((i+=2))
-                    ;;
-                *)
-                    # Not an escape sequence we care about, keep the backslash
-                    word+="$char"
-                    ((i++))
-                    ;;
-            esac
-        elif [[ "$char" =~ [[:space:]\;] ]]; then
-            # Whitespace or semicolon ends current word
-            if [[ -n "$word" ]]; then
-                # If word contains spaces or commas, quote it
-                if [[ "$word" =~ [[:space:],] ]]; then
-                    result+="\"$word\""
-                else
-                    result+="$word"
-                fi
-                word=""
-            fi
-            result+="$char"
-            ((i++))
-        else
-            word+="$char"
-            ((i++))
-        fi
-    done
-
-    # Handle last word
-    if [[ -n "$word" ]]; then
-        if [[ "$word" =~ [[:space:],] ]]; then
-            result+="\"$word\""
-        else
-            result+="$word"
-        fi
-    fi
-
-    echo "$result"
-}
-
 # Send command to current Ghostty split via AppleScript
+# Input: command string (may contain shell escaping)
 # shellcheck disable=SC2027,SC1078,SC2154
 send_ghostty_command() {
     local cmd="$1"
     print_debug "Sending command to split: $cmd"
 
-    # Convert backslash-escaped format to typeable format
-    local typeable_cmd
-    typeable_cmd=$(convert_to_typeable "$cmd")
-    print_debug "Converted to typeable: $typeable_cmd"
-
-    # Escape for AppleScript: both backslashes and quotes need escaping
-    # This ensures AppleScript can parse the string literal correctly
-    # shellcheck disable=SC2027,SC1078,SC2154
-    local escaped_cmd
-    escaped_cmd="$typeable_cmd"
-    escaped_cmd="${escaped_cmd//\\/\\\\}"    # Escape backslashes: \ -> \\
-    escaped_cmd="${escaped_cmd//\"/\\\"}"    # Escape quotes: " -> \"
+    # Escape for AppleScript: backslashes and quotes need escaping
+    # AppleScript string literals use backslash as escape character
+    local escaped_cmd="$cmd"
+    escaped_cmd="${escaped_cmd//\\/\\\\}"    # Escape backslashes first: \ → \\
+    escaped_cmd="${escaped_cmd//\"/\\\"}"    # Then escape quotes: " → \"
 
     # Type the command and press return
     print_debug "AppleScript escaped: $escaped_cmd"
@@ -795,8 +732,8 @@ run_multi_agents() {
                     cmd_arr+=("--prompt" "$prompt_joined")
                 fi
                 ;;
-            gemini)
-                # gemini: add -i when prompt present to remain interactive
+            gemini|qwen)
+                # gemini/qwen: add -i when prompt present to remain interactive
                 cmd_arr+=("$agent")
                 if [[ -n "$flags" ]]; then
                     # shellcheck disable=SC2206
@@ -1147,7 +1084,7 @@ mop_cleanup() {
             print_success "Deleted branch: $branch"
             ((branch_count++))
         fi
-    done < <(git branch | sed 's/^[* ] //' | grep -E '^(claude|codex|copilot|amp|opencode|gemini|droid|cursor-agent)-[0-9]+$')
+    done < <(git branch | sed 's/^[* ] //' | grep -E '^(claude|codex|copilot|amp|opencode|gemini|qwen|droid|cursor-agent)-[0-9]+$')
 
     if (( branch_count == 0 )); then
         print_info "No agent branches found"
@@ -1473,7 +1410,7 @@ main() {
                 full_command=("$command_name" --prompt "$prompt_joined")
             fi
             ;;
-        gemini)
+        gemini|qwen)
             if [[ -n "$flags" ]]; then
                 # shellcheck disable=SC2206
                 local flag_array=($flags)
