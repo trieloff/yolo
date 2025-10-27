@@ -247,7 +247,7 @@ get_command_flags() {
     # Default flags based on command
     case "$cmd" in
         codex)
-            echo "--dangerously-bypass-approvals-and-sandbox"
+            echo "--dangerously-bypass-approvals-and-sandbox --search"
             ;;
         claude)
             echo "--dangerously-skip-permissions"
