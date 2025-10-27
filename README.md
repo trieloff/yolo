@@ -19,6 +19,7 @@ Part of the **AI-Aligned** toolchain:
 - 🎯 **Smart Flags**: Automatically adds appropriate bypass flags for each AI tool
 - 🎲 **Full YOLO Mode**: Run without arguments to randomly select an installed agent
 - 🎭 **Multi-Agent Mode**: Launch multiple agents in parallel with split panes
+- 📝 **Editor Mode**: Compose complex prompts in your preferred editor
 - 🪟 **Ghostty Support**: Native split pane support for Ghostty terminal
 - 🌳 **Worktree Isolation**: Optional `-w` flag creates isolated git worktrees
 - 🔒 **Safe Experimentation**: Work in isolated environments without affecting main codebase
@@ -95,6 +96,31 @@ yolo codex "implement feature X"
 # Launch Copilot with --allow-all-tools --allow-all-paths
 yolo copilot chat
 ```
+
+### Editor Mode
+
+Compose longer, more complex prompts using your preferred editor:
+
+```bash
+# Launch $EDITOR to compose prompt for a single agent
+yolo -e claude
+
+# Compose prompt in editor for multiple agents
+yolo -e codex,claude,gemini
+
+# Works in full YOLO mode too
+yolo -e
+
+# Combine with worktree mode
+yolo -e -w claude
+```
+
+When you use `-e` or `--editor`, YOLO launches the editor specified in your `$EDITOR` environment variable (defaults to `vi`). After you save and close the editor, the content becomes the prompt for your agent(s). This works in:
+- **Single-agent mode**: Prompt passed to one agent
+- **Multi-agent mode**: Same prompt sent to all agents in parallel
+- **Full YOLO mode**: Prompt sent to randomly selected agent
+
+Lines starting with `#` in the editor are treated as comments and removed from the final prompt.
 
 ### Multi-Agent Mode
 
@@ -194,11 +220,17 @@ yolo claude
 yolo claude "fix all the bugs"
 yolo codex --help
 
+# Editor mode
+yolo -e claude                          # Compose prompt in editor
+yolo -e codex,claude,gemini             # Editor prompt for multi-agent
+yolo -e                                 # Editor + full YOLO mode
+
 # Worktree mode
 yolo -w claude                          # Prompt for cleanup
 yolo -w -c codex "quick test"           # Auto-cleanup
 yolo -w -nc claude "keep this"          # No cleanup
 yolo --worktree codex "refactoring"     # Prompt for cleanup
+yolo -e -w claude                       # Editor + worktree mode
 
 # OpenCode (no extra flags added)
 yolo opencode "build"

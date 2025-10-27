@@ -83,6 +83,7 @@ Options:
   -w, --worktree    Create a git worktree in .yolo/ before running command
   -c, --clean       Automatically clean up worktree after command completes
   -nc, --no-clean   Preserve worktree after command completes (no prompt)
+  -e, --editor      Launch \$EDITOR to compose prompt (works in all modes)
   -n, --dry-run     Show what would be executed without running it
   -m, --mop         Clean up all YOLO worktrees, branches, and processes
   -h, --help        Show this help message
@@ -114,10 +115,12 @@ Full YOLO Mode:
 Examples:
   yolo                             # Full YOLO mode - random agent selection
   yolo -w                          # Full YOLO mode in a new worktree
+  yolo -e claude                   # Compose prompt in editor, run claude
   yolo claude                      # Run claude with --dangerously-skip-permissions
   yolo -w claude "fix the bug"     # Create worktree, then run claude (prompt for cleanup)
   yolo -w -c claude "experiment"   # Create worktree, auto-cleanup after
   yolo -w -nc claude "keep this"   # Create worktree, preserve it after
+  yolo -e codex,claude,gemini      # Compose prompt in editor, run 3 agents in parallel
   yolo copilot chat                # Run copilot chat with safety flags disabled
 
 Worktree Mode:
@@ -1185,11 +1188,50 @@ prompt_cleanup() {
             ;;
     esac
 }
+
+# Launch editor to compose prompt
+# Returns: prompt text via stdout
+launch_editor_for_prompt() {
+    local editor="${EDITOR:-vi}"
+    local tmpfile
+    tmpfile="$(mktemp -t yolo-prompt-XXXXXX.txt)"
+
+    # Add helpful comment to temp file
+    cat > "$tmpfile" << 'EOF'
+# Enter your prompt below this line.
+# Lines starting with # will be removed.
+
+
+EOF
+
+    # Launch editor
+    if ! "$editor" "$tmpfile"; then
+        rm -f "$tmpfile"
+        print_error "Editor exited with error"
+        return 1
+    fi
+
+    # Read content, removing comment lines and trailing newlines
+    local content
+    content="$(grep -v '^#' "$tmpfile" | sed -e :a -e '/^\n*$/{ $d; N; ba' -e '}')"
+
+    rm -f "$tmpfile"
+
+    if [[ -z "$content" ]]; then
+        print_error "No prompt entered"
+        return 1
+    fi
+
+    echo "$content"
+    return 0
+}
+
 # Main function
 main() {
     local use_worktree=false
     local dry_run=false
     local auto_clean=""
+    local use_editor=false
     local command_name=""
     local command_args=()
 
@@ -1214,6 +1256,10 @@ main() {
                 ;;
             -nc|--no-clean)
                 auto_clean="no"
+                shift
+                ;;
+            -e|--editor)
+                use_editor=true
                 shift
                 ;;
             -n|--dry-run)
@@ -1258,6 +1304,21 @@ main() {
         command_name="$(pick_random_agent)" || exit 1
         print_success "Selected: $command_name"
         print_info ""
+    fi
+
+    # Launch editor to compose prompt if -e flag was provided
+    if [[ "$use_editor" == "true" ]]; then
+        if (( ${#command_args[@]} > 0 )); then
+            print_warning "Ignoring command-line prompt arguments in favor of editor"
+        fi
+        print_info "Launching editor to compose prompt..."
+        local editor_prompt
+        if ! editor_prompt="$(launch_editor_for_prompt)"; then
+            exit 1
+        fi
+        # Split editor content into array by lines for proper quoting
+        command_args=("$editor_prompt")
+        print_success "Prompt captured from editor"
     fi
 
     # Multi-agent mode: if comma-separated list given, launch via tmux/zellij
