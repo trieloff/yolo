@@ -38,6 +38,20 @@ AI coding assistants often require various "bypass" or "danger" flags to operate
 3. **Organizing experiments** - Each session gets its own timestamped branch in `.yolo/`
 4. **Easy cleanup** - Use `yolo --mop` to clean up all worktrees and branches
 
+## Kimi CLI Detection
+
+YOLO now automatically detects when it's running inside Kimi CLI and provides enhanced integration:
+
+- **Automatic Detection**: YOLO recognizes when it's launched from within Kimi CLI by analyzing the process tree
+- **Enhanced Messages**: Get informative feedback when running in Kimi CLI environment
+- **Seamless Integration**: No configuration needed - detection works automatically
+
+When YOLO detects it's running inside Kimi CLI, you'll see:
+```
+Detected Kimi CLI environment!
+YOLO is running inside Kimi CLI - enhanced integration enabled
+```
+
 ## Installation
 
 ### Quick Install (Recommended)
@@ -133,7 +147,7 @@ Launch multiple AI agents in parallel, each in its own split pane and isolated w
 yolo codex,claude,gemini "build a devcontainer and run tests"
 
 # Launch up to 9 agents at once
-yolo codex,claude,cursor-agent,opencode,amp,droid,copilot,gemini "say your name"
+yolo codex,claude,cursor-agent,opencode,amp,droid,copilot,gemini,kimi "say your name"
 
 # Each agent gets:
 # - Its own split pane in Ghostty
@@ -207,6 +221,7 @@ Use `--mop` to clean up orphaned worktrees from interrupted sessions or when you
 | `gemini` | `--yolo` (+ `-i` when prompt present) |
 | `opencode` | *(no flags)* |
 | `qwen` | `--yolo` (+ `-i` when prompt present) |
+| `kimi` | `--yolo` (+ `--command` when prompt present) |
 | *(other)* | `--yolo` |
 
 ### Examples
@@ -236,6 +251,10 @@ yolo -e -w claude                       # Editor + worktree mode
 # OpenCode (no extra flags added)
 yolo opencode "build"
 yolo -w opencode "run integration suite"
+
+# Kimi (uses --yolo flag)
+yolo kimi "explain this codebase"
+yolo -w kimi "refactor authentication system"
 
 # Help and version
 yolo --help
@@ -523,6 +542,7 @@ YOLO works with the following AI coding assistants:
 | **OpenCode** | [github.com/sst/opencode](https://github.com/sst/opencode) | Open-source AI coding agent for the terminal |
 | **Qwen** | [github.com/QwenLM/Qwen](https://github.com/QwenLM/Qwen) | Alibaba's state-of-the-art large language model for coding |
 | **Gemini** | [github.com/google-gemini/gemini-cli](https://github.com/google-gemini/gemini-cli) | Google's open-source AI agent with Gemini 2.5 Pro |
+| **Kimi** | [kimi.moonshot.cn](https://kimi.moonshot.cn) | Moonshot AI's coding assistant with advanced reasoning |
 
 ## Related Projects
 
@@ -530,6 +550,19 @@ YOLO works with the following AI coding assistants:
 - [ai-aligned-gh](https://github.com/trieloff/ai-aligned-gh) - Ensures proper bot attribution for GitHub operations
 - [vibe-coded-badge-action](https://github.com/trieloff/vibe-coded-badge-action) - Badge that visualizes AI contributions in your repo
 - [gh-workflow-peek](https://github.com/trieloff/gh-workflow-peek) - Filter and analyze GitHub Actions logs quickly
+
+## Version History
+
+### v1.1.0
+- **Kimi CLI Detection**: Added automatic detection when running inside Kimi CLI environment
+- Enhanced integration with Kimi CLI through process tree analysis
+- Improved user feedback for Kimi CLI users
+
+### v1.0.0
+- Initial release with support for 10+ AI coding assistants
+- Git worktree isolation for safe experimentation
+- Multi-agent parallel execution mode
+- Editor mode for complex prompt composition
 
 ## License
 

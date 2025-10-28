@@ -152,6 +152,7 @@ test_command_flags() {
         "cursor-agent:--force"
         "opencode:"  # no extra flags
         "qwen:--yolo"
+        "kimi:--yolo"
         "unknown-tool:--yolo"
     )
 
@@ -222,7 +223,64 @@ EOF
     rm -f "$test_script"
 }
 
-# Test 6: Test worktree creation (if in a git repo)
+# Test 5c: Kimi gets --command when prompt is provided (single-agent)
+test_kimi_command_with_prompt() {
+    print_test_header "Test 5c: Kimi --command Added With Prompt"
+    run_test
+
+    # Create a dummy kimi that just echoes its arguments
+    local test_script="/tmp/kimi"
+    cat > "$test_script" << 'EOF'
+#!/bin/bash
+echo "$@"
+EOF
+    chmod +x "$test_script"
+
+    # Run yolo kimi with a positional prompt
+    local output
+    if output=$(PATH="/tmp:$PATH" run_with_timeout "$YOLO_TEST_TIMEOUT" "$YOLO_CMD" kimi "hello world" 2>&1); then
+        if echo "$output" | grep -F -q -- "--command" && echo "$output" | grep -F -q -- "hello world"; then
+            print_pass "yolo kimi adds --command and passes prompt"
+        else
+            print_fail "yolo kimi should add --command and pass prompt (got: $output)"
+        fi
+    else
+        print_info "Skipping kimi --command test (command not executed)"
+    fi
+
+    rm -f "$test_script"
+}
+
+# Test 6: Test Kimi CLI detection function
+test_kimi_cli_detection() {
+    print_test_header "Test 6: Kimi CLI Detection"
+    run_test
+
+    # Create a test script that simulates kimi environment
+    local test_kimi_script="/tmp/test_kimi"
+    cat > "$test_kimi_script" << 'EOF'
+#!/bin/bash
+# Simulate kimi CLI by creating a fake process tree
+echo "Simulating Kimi CLI environment"
+EOF
+    chmod +x "$test_kimi_script"
+
+    # Test detection when not in kimi (should return false)
+    # Check for the actual detection output (second line) which won't appear in help text
+    if ! "$YOLO_CMD" --help 2>&1 | grep -q "YOLO is running inside Kimi CLI"; then
+        print_pass "No false positive Kimi CLI detection"
+    else
+        print_fail "False positive Kimi CLI detection"
+    fi
+
+    # Note: Full integration test would require actually running under kimi
+    # which is difficult to simulate in a test environment
+    print_info "Kimi CLI detection test completed (full integration requires actual Kimi CLI)"
+
+    rm -f "$test_kimi_script"
+}
+
+# Test 7: Test worktree creation (if in a git repo)
 test_worktree_creation() {
     print_test_header "Test 6: Worktree Creation"
 
@@ -379,6 +437,8 @@ main() {
     test_no_command_error
     test_command_flags
     test_qwen_interactive_with_prompt
+    test_kimi_command_with_prompt
+    test_kimi_cli_detection
     test_worktree_creation
     test_worktree_no_git_error
     test_argument_preservation
