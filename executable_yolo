@@ -1494,7 +1494,8 @@ main() {
 
                 # Use Ghostty split method if available for cleaner interactive experience
                 if is_ghostty; then
-                    local agent_cmd="copilot $flags_str --add-dir $(printf %q \"$trust_dir\")"
+                    local agent_cmd
+                    agent_cmd="copilot $flags_str --add-dir $(printf %q \"$trust_dir\")"
                     run_single_agent_ghostty_with_prompt "$agent_cmd" "$prompt_joined" "true"
                     exit $?
                 else
@@ -1523,7 +1524,8 @@ main() {
                 # kimi --command exits after execution, not interactive
                 # Use Ghostty split method for proper interactive experience
                 if is_ghostty; then
-                    local agent_cmd="kimi $flags_str"
+                    local agent_cmd
+                    agent_cmd="kimi $flags_str"
                     run_single_agent_ghostty_with_prompt "$agent_cmd" "$prompt_joined"
                     exit $?
                 else
