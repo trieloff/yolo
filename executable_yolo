@@ -102,7 +102,7 @@ Supported Commands:
   qwen              Uses --yolo; adds -i when prompt present
   kimi              Uses --yolo (requires Ghostty for interactive prompts)
   opencode          No extra flags added
-  crush             Uses --yolo; adds -i when prompt present
+  crush             Uses --yolo (requires Ghostty for interactive prompts)
   <other>           Adds --yolo (generic fallback)
 
 Multi-agent Mode:
@@ -927,8 +927,8 @@ run_multi_agents() {
                 fi
                 agent_prompts+=("")  # opencode handles prompts via --prompt flag
                 ;;
-            gemini|qwen|crush)
-                # gemini/qwen/crush: add -i when prompt present to remain interactive
+            gemini|qwen)
+                # gemini/qwen: add -i when prompt present to remain interactive
                 cmd_arr+=("$agent")
                 if [[ -n "$flags" ]]; then
                     # shellcheck disable=SC2206
@@ -940,7 +940,24 @@ run_multi_agents() {
                     prompt_joined=$(printf '%s ' "${common_args[@]}"); prompt_joined=${prompt_joined%% }
                     cmd_arr+=("-i" "$prompt_joined")
                 fi
-                agent_prompts+=("")  # gemini/qwen/crush handle prompts via -i flag
+                agent_prompts+=("")  # gemini/qwen handle prompts via -i flag
+                ;;
+            crush)
+                # crush: no -i flag, so use delayed prompt sending like kimi
+                cmd_arr+=("$agent")
+                if [[ -n "$flags" ]]; then
+                    # shellcheck disable=SC2206
+                    local flag_array=($flags)
+                    cmd_arr+=("${flag_array[@]}")
+                fi
+                # Store prompt for delayed sending via AppleScript
+                if (( ${#common_args[@]} )); then
+                    local prompt_joined
+                    prompt_joined=$(printf '%s ' "${common_args[@]}"); prompt_joined=${prompt_joined%% }
+                    agent_prompts+=("$prompt_joined")
+                else
+                    agent_prompts+=("")  # No prompt for this agent
+                fi
                 ;;
             droid)
                 # droid: allow inline prompt to seed session
@@ -1536,6 +1553,34 @@ main() {
                 else
                     print_error "kimi with prompts requires Ghostty terminal for interactive mode"
                     print_info "Either run in Ghostty or launch kimi without a prompt"
+                    exit 1
+                fi
+            else
+                # No prompt - just launch interactively
+                if [[ -n "$flags" ]]; then
+                    # shellcheck disable=SC2206
+                    local flag_array=($flags)
+                    full_command+=("${flag_array[@]}")
+                fi
+            fi
+            ;;
+        crush)
+            if (( ${#command_args[@]} )); then
+                local prompt_joined
+                prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
+                local flags_str=""
+                if [[ -n "$flags" ]]; then flags_str="$flags"; fi
+
+                # crush doesn't have -i flag, use delayed prompt sending like kimi
+                # Use Ghostty split method for proper interactive experience
+                if is_ghostty; then
+                    local agent_cmd
+                    agent_cmd="crush $flags_str"
+                    run_single_agent_ghostty_with_prompt "$agent_cmd" "$prompt_joined"
+                    exit $?
+                else
+                    print_error "crush with prompts requires Ghostty terminal for interactive mode"
+                    print_info "Either run in Ghostty or launch crush without a prompt"
                     exit 1
                 fi
             else
