@@ -132,7 +132,7 @@ Launch multiple AI agents in parallel, each in its own split pane and isolated w
 # Launch 3 agents in parallel with the same prompt
 yolo codex,claude,gemini "build a devcontainer and run tests"
 
-# Launch up to 9 agents at once
+# Launch up to 12 agents at once (example with 8)
 yolo codex,claude,cursor-agent,opencode,amp,droid,copilot,gemini "say your name"
 
 # Each agent gets:
@@ -142,7 +142,7 @@ yolo codex,claude,cursor-agent,opencode,amp,droid,copilot,gemini "say your name"
 ```
 
 **Multiplexer Support:**
-- **Ghostty** (preferred): Native split support with optimal grid layouts (2-9 agents)
+- **Ghostty** (preferred): Native split support with optimal grid layouts (2-12 agents)
 - **Zellij**: Dynamic KDL layouts with proper grid organization
 - **Tmux**: Tiled layout with split windows
 
