@@ -150,17 +150,15 @@ yolo codex,claude,gemini "build a devcontainer and run tests"
 yolo codex,claude,cursor-agent,opencode,amp,droid,copilot,gemini,kimi "say your name"
 
 # Each agent gets:
-# - Its own split pane (in Ghostty, zellij, or tmux)
+# - Its own split pane in Ghostty
 # - Its own isolated git worktree in .yolo/<agent>-N
 # - The same prompt/task
 ```
 
 **Multiplexer Support:**
-- **Ghostty** (preferred): Native split support with optimal grid layouts (2-9 agents)
-- **Zellij**: Dynamic KDL layouts with proper grid organization
-- **Tmux**: Tiled layout with split windows
+- **Ghostty**: Native split support with optimal grid layouts (2-9 agents)
 
-The tool automatically detects which multiplexer you have and uses the best available option. In Ghostty, splits are automatically cleaned up when agents exit.
+Multi-agent mode requires Ghostty terminal with AppleScript support. Splits are automatically cleaned up when agents exit.
 
 ### Worktree Mode
 
