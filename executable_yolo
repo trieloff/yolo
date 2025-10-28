@@ -107,7 +107,7 @@ Supported Commands:
 Multi-agent Mode:
   Provide a comma-separated list of agents as the command to launch them in parallel
   inside Ghostty terminal. Each agent runs in its own git worktree and its own pane.
-  Up to 9 agents are supported. Requires Ghostty terminal with AppleScript support.
+  Up to 12 agents are supported. Requires Ghostty terminal with AppleScript support.
 
   Example:
     yolo codex,claude,gemini "build a devcontainer and run tests"
@@ -313,11 +313,11 @@ get_installed_agents() {
     printf "%s\n" "${agents[@]}"
 }
 
-# Compute a near-square grid for N panes (max 9)
+# Compute a near-square grid for N panes (max 12)
 compute_grid_for_n() {
     local n="$1"
     if (( n < 1 )); then n=1; fi
-    if (( n > 9 )); then n=9; fi
+    if (( n > 12 )); then n=12; fi
     # Start with floor(sqrt(n)) rows and ceil(n/rows) cols
     local r c s
     s=$(awk -v n="$n" 'BEGIN{print int(sqrt(n))}')
@@ -472,8 +472,8 @@ send_ghostty_command() {
 test_ghostty_splits() {
     local n="$1"
 
-    if (( n < 2 || n > 9 )); then
-        print_error "split count must be between 2 and 9"
+    if (( n < 2 || n > 12 )); then
+        print_error "split count must be between 2 and 12"
         return 1
     fi
 
@@ -511,9 +511,9 @@ run_multi_agents_ghostty() {
     fi
 
     # Ghostty has a practical limit for splits
-    if (( n > 9 )); then
-        print_warning "more than 9 agents; limiting to 9 for Ghostty"
-        n=9
+    if (( n > 12 )); then
+        print_warning "more than 12 agents; limiting to 12 for Ghostty"
+        n=12
     fi
 
     # Detect terminal orientation
@@ -601,7 +601,7 @@ run_multi_agents_ghostty() {
         send_ghostty_command "${agent_cmds[$i]}"
 
     elif (( n >= 5 )); then
-        # 5-9 agents: generalized grid layout
+        # 5-12 agents: generalized grid layout
         if [[ "$is_landscape" == "true" ]]; then
             # Landscape: calculate optimal rows x cols
             local rows cols
@@ -721,9 +721,9 @@ run_multi_agents() {
         print_error "no agents provided in list"
         return 1
     fi
-    if (( ${#clean_agents[@]} > 9 )); then
-        print_warning "more than 9 agents requested; only first 9 will be used"
-        clean_agents=("${clean_agents[@]:0:9}")
+    if (( ${#clean_agents[@]} > 12 )); then
+        print_warning "more than 12 agents requested; only first 12 will be used"
+        clean_agents=("${clean_agents[@]:0:12}")
     fi
 
     local mux
