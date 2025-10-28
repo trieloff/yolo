@@ -266,7 +266,8 @@ EOF
     chmod +x "$test_kimi_script"
 
     # Test detection when not in kimi (should return false)
-    if ! "$YOLO_CMD" --help 2>&1 | grep -q "Detected Kimi CLI environment"; then
+    # Check for the actual detection output (second line) which won't appear in help text
+    if ! "$YOLO_CMD" --help 2>&1 | grep -q "YOLO is running inside Kimi CLI"; then
         print_pass "No false positive Kimi CLI detection"
     else
         print_fail "False positive Kimi CLI detection"
