@@ -100,6 +100,7 @@ Supported Commands:
   cursor-agent      Adds --force
   gemini            Uses --yolo; adds -i when prompt present
   qwen              Uses --yolo; adds -i when prompt present
+  kimi              No extra flags added (requires Ghostty for prompts)
   opencode          No extra flags added
   <other>           Adds --yolo (generic fallback)
 
@@ -279,6 +280,10 @@ get_command_flags() {
             # qwen-specific bypass flag
             echo "--yolo"
             ;;
+        kimi)
+            # kimi doesn't need extra flags for now
+            echo ""
+            ;;
         *)
             echo "--yolo"
             ;;
@@ -293,7 +298,7 @@ command_exists() {
 # Get all installed supported coding agents
 get_installed_agents() {
     local agents=()
-    local supported_commands=("codex" "claude" "copilot" "droid" "amp" "cursor-agent" "opencode" "qwen" "gemini")
+    local supported_commands=("codex" "claude" "copilot" "droid" "amp" "cursor-agent" "opencode" "qwen" "gemini" "kimi")
 
     for cmd in "${supported_commands[@]}"; do
         if command_exists "$cmd"; then
@@ -658,6 +663,42 @@ run_multi_agents_ghostty() {
     return 0
 }
 
+# Launch a single agent in a Ghostty split with prompt sent via AppleScript
+# This is used for agents like copilot and kimi that don't support interactive launching with a prompt
+# Args: agent_cmd (launch command without prompt), prompt_text
+run_single_agent_ghostty_with_prompt() {
+    local agent_cmd="$1"
+    local prompt_text="$2"
+
+    if ! is_ghostty; then
+        print_error "not running in Ghostty terminal"
+        return 1
+    fi
+
+    print_info "Launching agent in new Ghostty split with prompt..."
+
+    # Create a split (split right)
+    print_debug "Creating split..."
+    osascript -e 'tell application "System Events" to tell process "Ghostty" to click menu item "Split Right" of menu "File" of menu bar 1' >/dev/null 2>&1
+    sleep 0.5
+
+    # Launch the agent in the new split
+    print_debug "Launching agent: $agent_cmd"
+    send_ghostty_command "$agent_cmd"
+
+    # Wait for agent to start and be ready for input
+    # Different agents may have different startup times
+    print_debug "Waiting for agent to start..."
+    sleep 2
+
+    # Send the prompt
+    print_debug "Sending prompt via AppleScript: $prompt_text"
+    send_ghostty_command "$prompt_text"
+
+    print_success "Agent launched with prompt in split"
+    return 0
+}
+
 # Launch multiple agents in panes/tabs with per-agent worktrees
 run_multi_agents() {
     local agent_csv="$1"; shift || true
@@ -740,6 +781,17 @@ run_multi_agents() {
                         cmd_arr+=("${flag_array[@]}")
                     fi
                 fi
+                ;;
+            kimi)
+                # kimi: Similar to copilot, doesn't support direct interactive prompts
+                # For multi-agent mode, we'll launch it interactively and the user can paste the prompt
+                cmd_arr+=("$agent")
+                if [[ -n "$flags" ]]; then
+                    # shellcheck disable=SC2206
+                    local flag_array=($flags)
+                    cmd_arr+=("${flag_array[@]}")
+                fi
+                # Note: kimi will need manual prompt entry in multi-agent mode
                 ;;
             opencode)
                 # opencode: use --prompt to seed the TUI
@@ -1315,7 +1367,16 @@ main() {
                 # Trust the current directory explicitly
                 local trust_dir
                 trust_dir=$(pwd)
-                full_command=(bash -lc "copilot $flags_str --add-dir $(printf %q \"$trust_dir\") -p $(printf %q \"$prompt_joined\"); copilot $flags_str --add-dir $(printf %q \"$trust_dir\") --continue")
+
+                # Use Ghostty split method if available for cleaner interactive experience
+                if is_ghostty; then
+                    local agent_cmd="copilot $flags_str --add-dir $(printf %q \"$trust_dir\")"
+                    run_single_agent_ghostty_with_prompt "$agent_cmd" "$prompt_joined"
+                    exit $?
+                else
+                    # Fallback to one-shot + continue for non-Ghostty terminals
+                    full_command=(bash -lc "copilot $flags_str --add-dir $(printf %q \"$trust_dir\") -p $(printf %q \"$prompt_joined\"); copilot $flags_str --add-dir $(printf %q \"$trust_dir\") --continue")
+                fi
             else
                 if [[ -n "$flags" ]]; then
                     # shellcheck disable=SC2206
@@ -1326,6 +1387,33 @@ main() {
                 local trust_dir
                 trust_dir=$(pwd)
                 full_command+=(--add-dir "$trust_dir")
+            fi
+            ;;
+        kimi)
+            if (( ${#command_args[@]} )); then
+                local prompt_joined
+                prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
+                local flags_str=""
+                if [[ -n "$flags" ]]; then flags_str="$flags"; fi
+
+                # kimi doesn't support interactive launching with a prompt
+                # Use Ghostty split method for proper interactive experience
+                if is_ghostty; then
+                    local agent_cmd="kimi $flags_str"
+                    run_single_agent_ghostty_with_prompt "$agent_cmd" "$prompt_joined"
+                    exit $?
+                else
+                    print_error "kimi requires Ghostty terminal for launching with prompts"
+                    print_info "Either run in Ghostty or launch kimi without a prompt"
+                    exit 1
+                fi
+            else
+                # No prompt - just launch interactively
+                if [[ -n "$flags" ]]; then
+                    # shellcheck disable=SC2206
+                    local flag_array=($flags)
+                    full_command+=("${flag_array[@]}")
+                fi
             fi
             ;;
         opencode)
