@@ -100,7 +100,7 @@ Supported Commands:
   cursor-agent      Adds --force
   gemini            Uses --yolo; adds -i when prompt present
   qwen              Uses --yolo; adds -i when prompt present
-  kimi              Uses --yolo; adds --command when prompt present
+  kimi              Uses --yolo (requires Ghostty for interactive prompts)
   opencode          No extra flags added
   <other>           Adds --yolo (generic fallback)
 
@@ -696,7 +696,7 @@ run_multi_agents_ghostty() {
     local eq_rc=$?
     print_debug "Equalize splits exit code: $eq_rc"
 
-    # Send delayed prompts to agents that need them (copilot only)
+    # Send delayed prompts to agents that need them (copilot, kimi)
     if [[ -n "${YOLO_AGENT_PROMPTS:-}" ]] && (( ${#YOLO_AGENT_PROMPTS[@]} > 0 )); then
         print_debug "Checking for delayed prompts to send..."
         local has_prompts=false
@@ -750,7 +750,8 @@ run_multi_agents_ghostty() {
 }
 
 # Launch a single agent in a Ghostty split with prompt sent via AppleScript
-# This is used for agents like copilot that don't support interactive launching with a prompt
+# This is used for agents like copilot and kimi that don't support interactive launching with a prompt
+# (Their prompt flags cause immediate exit after execution)
 # Args: agent_cmd (launch command without prompt), prompt_text
 run_single_agent_ghostty_with_prompt() {
     local agent_cmd="$1"
@@ -872,19 +873,21 @@ run_multi_agents() {
                 fi
                 ;;
             kimi)
-                # kimi: use --command for prompts
+                # kimi: --command exits after execution, so use delayed prompt sending
                 cmd_arr+=("$agent")
                 if [[ -n "$flags" ]]; then
                     # shellcheck disable=SC2206
                     local flag_array=($flags)
                     cmd_arr+=("${flag_array[@]}")
                 fi
+                # Store prompt for delayed sending via AppleScript
                 if (( ${#common_args[@]} )); then
                     local prompt_joined
                     prompt_joined=$(printf '%s ' "${common_args[@]}"); prompt_joined=${prompt_joined%% }
-                    cmd_arr+=("--command" "$prompt_joined")
+                    agent_prompts+=("$prompt_joined")
+                else
+                    agent_prompts+=("")  # No prompt for this agent
                 fi
-                agent_prompts+=("")  # kimi handles prompts via --command flag
                 ;;
             opencode)
                 # opencode: use --prompt to seed the TUI
@@ -1501,15 +1504,30 @@ main() {
             fi
             ;;
         kimi)
-            if [[ -n "$flags" ]]; then
-                # shellcheck disable=SC2206
-                local flag_array=($flags)
-                full_command+=("${flag_array[@]}")
-            fi
             if (( ${#command_args[@]} )); then
                 local prompt_joined
                 prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
-                full_command+=("--command" "$prompt_joined")
+                local flags_str=""
+                if [[ -n "$flags" ]]; then flags_str="$flags"; fi
+
+                # kimi --command exits after execution, not interactive
+                # Use Ghostty split method for proper interactive experience
+                if is_ghostty; then
+                    local agent_cmd="kimi $flags_str"
+                    run_single_agent_ghostty_with_prompt "$agent_cmd" "$prompt_joined"
+                    exit $?
+                else
+                    print_error "kimi with prompts requires Ghostty terminal for interactive mode"
+                    print_info "Either run in Ghostty or launch kimi without a prompt"
+                    exit 1
+                fi
+            else
+                # No prompt - just launch interactively
+                if [[ -n "$flags" ]]; then
+                    # shellcheck disable=SC2206
+                    local flag_array=($flags)
+                    full_command+=("${flag_array[@]}")
+                fi
             fi
             ;;
         opencode)
