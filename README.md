@@ -98,7 +98,7 @@ yolo -w
 yolo --dry-run
 ```
 
-When you run `yolo` without specifying a command, it scans your system for all installed supported coding agents (codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini) and picks one at random. You only live yolo - even choosing your AI assistant is too much commitment!
+When you run `yolo` without specifying a command, it scans your system for all installed supported coding agents (codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini, qwen, kimi, crush) and picks one at random. You only live yolo - even choosing your AI assistant is too much commitment!
 
 ### Basic Usage
 
@@ -222,6 +222,7 @@ Use `--mop` to clean up orphaned worktrees from interrupted sessions or when you
 | `opencode` | *(no flags)* |
 | `qwen` | `--yolo` (+ `-i` when prompt present) |
 | `kimi` | `--yolo` (+ `--command` when prompt present) |
+| `crush` | `--yolo` (+ Ghostty injection when prompt present) |
 | *(other)* | `--yolo` |
 
 ### Examples
@@ -256,6 +257,11 @@ yolo -w opencode "run integration suite"
 yolo kimi "explain this codebase"
 yolo -w kimi "refactor authentication system"
 
+# Crush (uses --yolo flag)
+yolo crush "add type annotations"
+yolo -w crush "implement error handling"
+yolo codex,claude,crush "review this code"
+
 # Help and version
 yolo --help
 yolo --version
@@ -280,7 +286,7 @@ When you run `yolo` without specifying a command:
 yolo
 
 # YOLO does:
-# 1. Scans PATH for installed agents (codex, claude, copilot, droid, amp, cursor-agent, opencode, qwen, gemini)
+# 1. Scans PATH for installed agents (codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini, qwen, kimi, crush)
 # 2. Picks one at random using $RANDOM
 # 3. Adds appropriate flags for that agent
 # 4. Launches it
@@ -543,6 +549,7 @@ YOLO works with the following AI coding assistants:
 | **Qwen** | [github.com/QwenLM/Qwen](https://github.com/QwenLM/Qwen) | Alibaba's state-of-the-art large language model for coding |
 | **Gemini** | [github.com/google-gemini/gemini-cli](https://github.com/google-gemini/gemini-cli) | Google's open-source AI agent with Gemini 2.5 Pro |
 | **Kimi** | [kimi.moonshot.cn](https://kimi.moonshot.cn) | Moonshot AI's coding assistant with advanced reasoning |
+| **Crush** | [charm.sh/crush](https://charm.sh/crush) | Charm's interactive CLI tool for software engineering tasks |
 
 ## Related Projects
 
