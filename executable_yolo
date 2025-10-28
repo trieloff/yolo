@@ -461,7 +461,7 @@ send_ghostty_command() {
     osascript -e "tell application \"System Events\" to tell process \"Ghostty\" to keystroke \"$escaped_cmd\"" 2>&1 | head -3
     local rc1=$?
     print_debug "keystroke exit code: $rc1"
-    sleep 0.1
+    sleep 0.5  # Increased delay for agents to process input
     osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke return' 2>&1 | head -3
     local rc2=$?
     print_debug "return key exit code: $rc2"
@@ -724,8 +724,17 @@ run_multi_agents_ghostty() {
             # Send prompts to each split in order
             for idx in "${!YOLO_AGENT_PROMPTS[@]}"; do
                 local prompt_text="${YOLO_AGENT_PROMPTS[$idx]}"
+                local agent_name="${YOLO_AGENT_NAMES[$idx]:-}"
+
                 if [[ -n "$prompt_text" ]]; then
-                    print_debug "Sending delayed prompt to split $idx: $prompt_text"
+                    # copilot shows a dialog that needs to be dismissed first
+                    if [[ "$agent_name" == "copilot" ]]; then
+                        print_debug "Dismissing copilot dialog for split $idx"
+                        osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke return' >/dev/null 2>&1
+                        sleep 1
+                    fi
+
+                    print_debug "Sending delayed prompt to split $idx ($agent_name): $prompt_text"
                     send_ghostty_command "$prompt_text"
                 fi
 
@@ -752,10 +761,11 @@ run_multi_agents_ghostty() {
 # Launch a single agent in a Ghostty split with prompt sent via AppleScript
 # This is used for agents like copilot and kimi that don't support interactive launching with a prompt
 # (Their prompt flags cause immediate exit after execution)
-# Args: agent_cmd (launch command without prompt), prompt_text
+# Args: agent_cmd (launch command without prompt), prompt_text, is_copilot (optional, "true" if copilot)
 run_single_agent_ghostty_with_prompt() {
     local agent_cmd="$1"
     local prompt_text="$2"
+    local is_copilot="${3:-false}"
 
     if ! is_ghostty; then
         print_error "not running in Ghostty terminal"
@@ -777,6 +787,13 @@ run_single_agent_ghostty_with_prompt() {
     # Different agents may have different startup times
     print_debug "Waiting for agent to start..."
     sleep 2
+
+    # copilot shows a dialog that needs to be dismissed first
+    if [[ "$is_copilot" == "true" ]]; then
+        print_debug "Dismissing copilot dialog..."
+        osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke return' >/dev/null 2>&1
+        sleep 1
+    fi
 
     # Send the prompt
     print_debug "Sending prompt via AppleScript: $prompt_text"
@@ -1029,8 +1046,9 @@ run_multi_agents() {
         done
 
         # Call Ghostty-specific implementation
-        # Pass prompts via global variable since bash can't pass multiple arrays
+        # Pass prompts and agent names via global variables since bash can't pass multiple arrays
         YOLO_AGENT_PROMPTS=("${agent_prompts[@]}")
+        YOLO_AGENT_NAMES=("${clean_agents[@]}")
         print_debug "Calling run_multi_agents_ghostty with ${#wrapped_cmds[@]} commands and ${#agent_prompts[@]} prompts"
         run_multi_agents_ghostty "${wrapped_cmds[@]}"
         local ghostty_rc=$?
@@ -1485,7 +1503,7 @@ main() {
                 # Use Ghostty split method if available for cleaner interactive experience
                 if is_ghostty; then
                     local agent_cmd="copilot $flags_str --add-dir $(printf %q \"$trust_dir\")"
-                    run_single_agent_ghostty_with_prompt "$agent_cmd" "$prompt_joined"
+                    run_single_agent_ghostty_with_prompt "$agent_cmd" "$prompt_joined" "true"
                     exit $?
                 else
                     # Fallback to one-shot + continue for non-Ghostty terminals
