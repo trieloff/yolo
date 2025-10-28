@@ -727,6 +727,10 @@ run_multi_agents_ghostty() {
                 local agent_name="${YOLO_AGENT_NAMES[$idx]:-}"
 
                 if [[ -n "$prompt_text" ]]; then
+                    # Ensure split is focused before sending
+                    print_debug "Ensuring split $idx is focused..."
+                    sleep 0.3
+
                     # copilot shows a dialog that needs to be dismissed first
                     if [[ "$agent_name" == "copilot" ]]; then
                         print_debug "Dismissing copilot dialog for split $idx"
@@ -736,6 +740,10 @@ run_multi_agents_ghostty() {
 
                     print_debug "Sending delayed prompt to split $idx ($agent_name): $prompt_text"
                     send_ghostty_command "$prompt_text"
+
+                    # Wait longer for command to be processed before navigating away
+                    print_debug "Waiting for command to be processed..."
+                    sleep 1
                 fi
 
                 # Navigate to next split (right if landscape, down if portrait)
@@ -745,7 +753,7 @@ run_multi_agents_ghostty() {
                     else
                         osascript -e 'tell application "System Events" to tell process "Ghostty" to key code 125 using {command down, option down}' >/dev/null 2>&1
                     fi
-                    sleep 0.2
+                    sleep 0.5
                 fi
             done
 
