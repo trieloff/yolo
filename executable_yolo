@@ -361,7 +361,12 @@ is_kimi_cli() {
     while [[ $pid -ne 0 && $depth -lt $max_depth ]]; do
         local cmd
         if cmd=$(ps -p "$pid" -o command= 2>/dev/null); then
-            if [[ "$cmd" == *"/kimi"* ]]; then
+            # Extract the command name from the full command line
+            local cmd_name="${cmd%% *}"  # Get first word (the executable)
+            local base_name="${cmd_name##*/}"  # Get basename without path
+
+            # Check if the executable is exactly "kimi"
+            if [[ "$base_name" == "kimi" ]]; then
                 return 0
             fi
         fi
