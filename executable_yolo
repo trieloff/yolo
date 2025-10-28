@@ -105,8 +105,8 @@ Supported Commands:
 
 Multi-agent Mode:
   Provide a comma-separated list of agents as the command to launch them in parallel
-  inside zellij (preferred) or tmux if installed. Each agent runs in its own
-  git worktree and its own pane/window. Up to 12 agents are supported.
+  inside Ghostty terminal. Each agent runs in its own git worktree and its own pane.
+  Up to 12 agents are supported. Requires Ghostty terminal with AppleScript support.
 
   Example:
     yolo codex,claude,gemini "build a devcontainer and run tests"
@@ -342,18 +342,10 @@ is_ghostty() {
     [[ "${TERM_PROGRAM:-}" == "ghostty" ]] || [[ -n "${GHOSTTY_BIN_DIR:-}" ]]
 }
 
-# Choose multiplexer: prefer Ghostty when inside it and AppleScript is available, then zellij, then tmux; empty if none
+# Choose multiplexer: prefer Ghostty when inside it and AppleScript is available; empty if none
 choose_multiplexer() {
     if is_ghostty && command_exists osascript; then
         echo ghostty
-        return 0
-    fi
-    if command_exists zellij; then
-        echo zellij
-        return 0
-    fi
-    if command_exists tmux; then
-        echo tmux
         return 0
     fi
     echo ""
@@ -694,7 +686,8 @@ run_multi_agents() {
     local mux
     mux="$(choose_multiplexer)"
     if [[ -z "$mux" ]]; then
-        print_error "neither tmux nor zellij found in PATH"
+        print_error "Ghostty terminal with AppleScript support not available"
+        print_info "Multi-agent mode requires Ghostty terminal"
         return 1
     fi
 
@@ -894,104 +887,6 @@ run_multi_agents() {
 
         print_debug "run_multi_agents returning 0 from ghostty block"
         return 0
-
-    elif [[ "$mux" == tmux ]]; then
-        local session
-        session="yolo-$(date +%s)"
-        # Start detached session sized to current terminal, first pane at first agent path
-        tmux new-session -d -s "$session" -x "$cols" -y "$rows" -c "${agent_paths[0]}"
-        # Send first agent command
-        tmux send-keys -t "$session":0.0 "${agent_cmds[0]}" C-m
-
-        local i
-        for i in $(seq 1 $((n-1))); do
-            tmux split-window -t "$session":0 -c "${agent_paths[$i]}"
-            tmux send-keys -t "$session":0 "${agent_cmds[$i]}" C-m
-        done
-        tmux select-layout -t "$session":0 tiled
-
-        # If a common prompt was provided, broadcast it across panes
-        if (( ${#common_args[@]} )); then
-            local prompt_joined
-            prompt_joined=$(printf '%s ' "${common_args[@]}"); prompt_joined=${prompt_joined%% }
-            tmux set-window-option -t "$session":0 synchronize-panes on
-            tmux send-keys -t "$session":0 -l "$prompt_joined"
-            tmux send-keys -t "$session":0 C-m
-            tmux set-window-option -t "$session":0 synchronize-panes off
-        fi
-
-        print_success "Launching tmux session: $session with $n panes"
-        tmux attach-session -t "$session"
-
-    else
-        # zellij preferred: generate a temporary layout with rows/cols based on terminal size
-        local layout_file
-        layout_file="$(mktemp -t yolo-layout-XXXXXX.kdl)"
-
-        # Determine orientation and distribute panes row-wise
-        local orient
-        if (( cols >= rows )); then
-            orient="landscape"
-        else
-            orient="portrait"
-        fi
-
-        local R C
-        read -r R C < <(compute_grid_for_n "$n")
-        if [[ "$orient" == "portrait" ]]; then
-            # Prefer more rows in portrait
-            local tmp=$R; R=$C; C=$tmp
-        fi
-
-        # Build row sizes
-        local remaining=$n
-        local -a row_sizes=()
-        local r_i
-        for r_i in $(seq 1 "$R"); do
-            if (( remaining <= 0 )); then break; fi
-            if (( remaining >= C )); then
-                row_sizes+=("$C")
-                remaining=$((remaining - C))
-            else
-                row_sizes+=("$remaining")
-                remaining=0
-            fi
-        done
-
-        # Write KDL layout: one tab with horizontal rows and vertical panes per row
-        {
-          echo "layout {"
-          echo "  pane split_direction=\"horizontal\" {"
-          local index=0
-          local row_count=${#row_sizes[@]}
-          for r_i in $(seq 0 $((row_count-1))); do
-            local cols_in_row=${row_sizes[$r_i]}
-            echo "    pane split_direction=\"vertical\" {"
-            for _ in $(seq 1 "$cols_in_row"); do
-              local cmd path
-              cmd=$(kdl_escape "${agent_cmds[$index]}")
-              path=$(kdl_escape "${agent_paths[$index]}")
-              echo "      pane cwd=\"$path\" {"
-              echo "        command \"bash\""
-              echo "        args \"-lc\" \"$cmd\""
-              echo "      }"
-              index=$((index+1))
-            done
-            echo "    }"
-          done
-          echo "  }"
-          echo "}"
-        } > "$layout_file"
-
-        # Start a new named session with the layout and attach to it
-        local session
-        session="yolo-$(date +%s)"
-        zellij -s "$session" --new-session-with-layout "$layout_file"
-        print_success "Launching zellij session: $session with $n panes"
-        zellij attach "$session"
-
-        # Clean temporary layout after exit
-        rm -f "$layout_file"
     fi
 
     # After session exits, handle cleanup
