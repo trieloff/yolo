@@ -937,20 +937,6 @@ run_multi_agents() {
                 fi
                 agent_prompts+=("")  # gemini/qwen handle prompts via -i flag
                 ;;
-            kimi)
-                # kimi: use --command for prompts
-                cmd_arr+=("$agent")
-                if [[ -n "$flags" ]]; then
-                    # shellcheck disable=SC2206
-                    local flag_array=($flags)
-                    cmd_arr+=("${flag_array[@]}")
-                fi
-                if (( ${#common_args[@]} )); then
-                    local prompt_joined
-                    prompt_joined=$(printf '%s ' "${common_args[@]}"); prompt_joined=${prompt_joined%% }
-                    cmd_arr+=("--command" "$prompt_joined")
-                fi
-                ;;
             droid)
                 # droid: allow inline prompt to seed session
                 cmd_arr+=("$agent")
@@ -1571,18 +1557,6 @@ main() {
                 local prompt_joined
                 prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
                 full_command+=("-i" "$prompt_joined")
-            fi
-            ;;
-        kimi)
-            if [[ -n "$flags" ]]; then
-                # shellcheck disable=SC2206
-                local flag_array=($flags)
-                full_command+=("${flag_array[@]}")
-            fi
-            if (( ${#command_args[@]} )); then
-                local prompt_joined
-                prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
-                full_command+=("--command" "$prompt_joined")
             fi
             ;;
         droid)
