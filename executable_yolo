@@ -1125,17 +1125,17 @@ prompt_cleanup() {
 
     echo ""
     print_info "Worktree session completed."
-    read -r -p "Clean up worktree and branch? (y/n): " response
+    read -r -p "Clean up worktree and branch? (Y/n): " response
 
     case "$response" in
-        [yY]|[yY][eE][sS])
-            cleanup_worktree "$branch_name" "$worktree_path" "$repo_root"
-            ;;
-        *)
+        [nN]|[nN][oO])
             print_info "Worktree preserved at: $worktree_path"
             print_info "To clean up later, run:"
             echo "  git worktree remove $worktree_path"
             echo "  git branch -D $branch_name"
+            ;;
+        *)
+            cleanup_worktree "$branch_name" "$worktree_path" "$repo_root"
             ;;
     esac
 }
