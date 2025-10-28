@@ -14,7 +14,7 @@
 
 set -euo pipefail
 
-VERSION="1.0.0"
+VERSION="1.1.0"
 
 # Color output helpers
 RED='\033[0;31m'
@@ -100,6 +100,7 @@ Supported Commands:
   cursor-agent      Adds --force
   gemini            Uses --yolo; adds -i when prompt present
   qwen              Uses --yolo; adds -i when prompt present
+  kimi              Uses --yolo; adds --command when prompt present
   opencode          No extra flags added
   <other>           Adds --yolo (generic fallback)
 
@@ -114,6 +115,10 @@ Multi-agent Mode:
 Full YOLO Mode:
   Run 'yolo' without a command to randomly select an installed coding agent.
   You only live yolo - let fate decide which AI assistant you get!
+
+Kimi CLI Detection:
+  YOLO automatically detects when running inside Kimi CLI and provides enhanced
+  integration. Look for the "Detected Kimi CLI environment!" message.
 
 Examples:
   yolo                             # Full YOLO mode - random agent selection
@@ -279,6 +284,10 @@ get_command_flags() {
             # qwen-specific bypass flag
             echo "--yolo"
             ;;
+        kimi)
+            # kimi uses --yolo for auto-approval
+            echo "--yolo"
+            ;;
         *)
             echo "--yolo"
             ;;
@@ -293,7 +302,7 @@ command_exists() {
 # Get all installed supported coding agents
 get_installed_agents() {
     local agents=()
-    local supported_commands=("codex" "claude" "copilot" "droid" "amp" "cursor-agent" "opencode" "qwen" "gemini")
+    local supported_commands=("codex" "claude" "copilot" "droid" "amp" "cursor-agent" "opencode" "qwen" "gemini" "kimi")
 
     for cmd in "${supported_commands[@]}"; do
         if command_exists "$cmd"; then
@@ -340,6 +349,40 @@ detect_terminal_size() {
 # Detect if running inside Ghostty terminal
 is_ghostty() {
     [[ "${TERM_PROGRAM:-}" == "ghostty" ]] || [[ -n "${GHOSTTY_BIN_DIR:-}" ]]
+}
+
+# Detect if running inside Kimi CLI by checking process tree
+is_kimi_cli() {
+    local pid=$$
+    local max_depth=10
+    local depth=0
+
+    # Walk up the process tree to check if we're running under kimi
+    while [[ $pid -ne 0 && $depth -lt $max_depth ]]; do
+        local cmd
+        if cmd=$(ps -p "$pid" -o command= 2>/dev/null); then
+            # Extract the command name from the full command line
+            local cmd_name="${cmd%% *}"  # Get first word (the executable)
+            local base_name="${cmd_name##*/}"  # Get basename without path
+
+            # Check if the executable is exactly "kimi"
+            if [[ "$base_name" == "kimi" ]]; then
+                return 0
+            fi
+        fi
+
+        # Get parent process ID
+        local ppid
+        if ppid=$(ps -p "$pid" -o ppid= 2>/dev/null); then
+            pid=$(echo "$ppid" | tr -d ' ')
+        else
+            break
+        fi
+
+        depth=$((depth + 1))
+    done
+
+    return 1
 }
 
 # Choose multiplexer: prefer Ghostty when inside it and AppleScript is available; empty if none
@@ -764,6 +807,20 @@ run_multi_agents() {
                     cmd_arr+=("-i" "$prompt_joined")
                 fi
                 ;;
+            kimi)
+                # kimi: use --command for prompts
+                cmd_arr+=("$agent")
+                if [[ -n "$flags" ]]; then
+                    # shellcheck disable=SC2206
+                    local flag_array=($flags)
+                    cmd_arr+=("${flag_array[@]}")
+                fi
+                if (( ${#common_args[@]} )); then
+                    local prompt_joined
+                    prompt_joined=$(printf '%s ' "${common_args[@]}"); prompt_joined=${prompt_joined%% }
+                    cmd_arr+=("--command" "$prompt_joined")
+                fi
+                ;;
             droid)
                 # droid: allow inline prompt to seed session
                 cmd_arr+=("$agent")
@@ -924,7 +981,7 @@ pick_random_agent() {
 
     if [[ ${#agents[@]} -eq 0 ]]; then
         print_error "no supported coding agents found in PATH"
-        print_info "Supported agents: codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini"
+        print_info "Supported agents: codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini, kimi"
         return 1
     fi
 
@@ -1009,7 +1066,7 @@ mop_cleanup() {
             print_success "Deleted branch: $branch"
             ((branch_count++))
         fi
-    done < <(git branch | sed 's/^[* ] //' | grep -E '^(claude|codex|copilot|amp|opencode|gemini|qwen|droid|cursor-agent)-[0-9]+$')
+    done < <(git branch | sed 's/^[* ] //' | grep -E '^(claude|codex|copilot|amp|opencode|gemini|qwen|droid|cursor-agent|kimi)-[0-9]+$')
 
     if (( branch_count == 0 )); then
         print_info "No agent branches found"
@@ -1068,17 +1125,17 @@ prompt_cleanup() {
 
     echo ""
     print_info "Worktree session completed."
-    read -r -p "Clean up worktree and branch? (y/n): " response
+    read -r -p "Clean up worktree and branch? (Y/n): " response
 
     case "$response" in
-        [yY]|[yY][eE][sS])
-            cleanup_worktree "$branch_name" "$worktree_path" "$repo_root"
-            ;;
-        *)
+        [nN]|[nN][oO])
             print_info "Worktree preserved at: $worktree_path"
             print_info "To clean up later, run:"
             echo "  git worktree remove $worktree_path"
             echo "  git branch -D $branch_name"
+            ;;
+        *)
+            cleanup_worktree "$branch_name" "$worktree_path" "$repo_root"
             ;;
     esac
 }
@@ -1197,6 +1254,13 @@ main() {
         esac
     done
 
+    # Detect if running inside Kimi CLI and show informative message
+    if is_kimi_cli; then
+        print_info "Detected Kimi CLI environment!"
+        print_info "YOLO is running inside Kimi CLI - enhanced integration enabled"
+        print_info ""
+    fi
+
     # Handle -a/--all-agents/--waddan mode: launch all available agents
     if [[ "$use_waddan" == "true" ]]; then
         print_info "All-agents mode activated! Launching all available agents..."
@@ -1208,7 +1272,7 @@ main() {
         
         if [[ ${#all_agents[@]} -eq 0 ]]; then
             print_error "no supported coding agents found in PATH"
-            print_info "Supported agents: codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini"
+            print_info "Supported agents: codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini, kimi"
             exit 1
         fi
         
@@ -1345,6 +1409,18 @@ main() {
                 local prompt_joined
                 prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
                 full_command+=("-i" "$prompt_joined")
+            fi
+            ;;
+        kimi)
+            if [[ -n "$flags" ]]; then
+                # shellcheck disable=SC2206
+                local flag_array=($flags)
+                full_command+=("${flag_array[@]}")
+            fi
+            if (( ${#command_args[@]} )); then
+                local prompt_joined
+                prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
+                full_command+=("--command" "$prompt_joined")
             fi
             ;;
         droid)
