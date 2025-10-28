@@ -658,6 +658,54 @@ run_multi_agents_ghostty() {
     local eq_rc=$?
     print_debug "Equalize splits exit code: $eq_rc"
 
+    # Send delayed prompts to agents that need them (copilot, kimi)
+    if [[ -n "${YOLO_AGENT_PROMPTS:-}" ]] && (( ${#YOLO_AGENT_PROMPTS[@]} > 0 )); then
+        print_debug "Checking for delayed prompts to send..."
+        local has_prompts=false
+        local idx
+        for idx in "${!YOLO_AGENT_PROMPTS[@]}"; do
+            if [[ -n "${YOLO_AGENT_PROMPTS[$idx]}" ]]; then
+                has_prompts=true
+                break
+            fi
+        done
+
+        if [[ "$has_prompts" == "true" ]]; then
+            print_info "Waiting for agents to start before sending prompts..."
+            sleep 2
+
+            # Navigate back to first split (go left/up multiple times to ensure we're at split 0)
+            print_debug "Navigating to first split..."
+            for ((nav=0; nav<n; nav++)); do
+                osascript -e 'tell application "System Events" to tell process "Ghostty" to key code 123 using {command down, option down}' >/dev/null 2>&1
+                sleep 0.1
+                osascript -e 'tell application "System Events" to tell process "Ghostty" to key code 126 using {command down, option down}' >/dev/null 2>&1
+                sleep 0.1
+            done
+
+            # Send prompts to each split in order
+            for idx in "${!YOLO_AGENT_PROMPTS[@]}"; do
+                local prompt_text="${YOLO_AGENT_PROMPTS[$idx]}"
+                if [[ -n "$prompt_text" ]]; then
+                    print_debug "Sending delayed prompt to split $idx: $prompt_text"
+                    send_ghostty_command "$prompt_text"
+                fi
+
+                # Navigate to next split (right if landscape, down if portrait)
+                if (( idx < n - 1 )); then
+                    if [[ "$is_landscape" == "true" ]]; then
+                        osascript -e 'tell application "System Events" to tell process "Ghostty" to key code 124 using {command down, option down}' >/dev/null 2>&1
+                    else
+                        osascript -e 'tell application "System Events" to tell process "Ghostty" to key code 125 using {command down, option down}' >/dev/null 2>&1
+                    fi
+                    sleep 0.2
+                fi
+            done
+
+            print_success "Delayed prompts sent to agents"
+        fi
+    fi
+
     print_success "Created $n agent splits in Ghostty with commands launched"
     print_debug "run_multi_agents_ghostty returning 0"
     return 0
@@ -737,6 +785,7 @@ run_multi_agents() {
     local -a agent_cmds=()
     local -a agent_paths=()
     local -a agent_branches=()
+    local -a agent_prompts=()  # For agents that need delayed prompt sending
 
     local agent
     for agent in "${clean_agents[@]}"; do
@@ -764,34 +813,43 @@ run_multi_agents() {
                         cmd_arr+=("${flag_array[@]}")
                     fi
                 fi
+                agent_prompts+=("")  # amp handles prompts via stdin, not delayed
                 ;;
             copilot)
-                # Copilot: If prompt provided, run one-shot then resume most recent session
-                if (( ${#common_args[@]} )); then
-                    local prompt_joined
-                    prompt_joined=$(printf '%s ' "${common_args[@]}"); prompt_joined=${prompt_joined%% }
-                    local flags_str=""
-                    if [[ -n "$flags" ]]; then flags_str="$flags"; fi
-                    shell_cmd="copilot $flags_str -p $(printf %q \"$prompt_joined\"); copilot $flags_str --continue"
-                else
-                    cmd_arr+=("$agent")
-                    if [[ -n "$flags" ]]; then
-                        # shellcheck disable=SC2206
-                        local flag_array=($flags)
-                        cmd_arr+=("${flag_array[@]}")
-                    fi
-                fi
-                ;;
-            kimi)
-                # kimi: Similar to copilot, doesn't support direct interactive prompts
-                # For multi-agent mode, we'll launch it interactively and the user can paste the prompt
+                # Copilot: doesn't support direct interactive prompts
+                # Launch agent, then send prompt via AppleScript after startup
                 cmd_arr+=("$agent")
                 if [[ -n "$flags" ]]; then
                     # shellcheck disable=SC2206
                     local flag_array=($flags)
                     cmd_arr+=("${flag_array[@]}")
                 fi
-                # Note: kimi will need manual prompt entry in multi-agent mode
+                # Store prompt for delayed sending
+                if (( ${#common_args[@]} )); then
+                    local prompt_joined
+                    prompt_joined=$(printf '%s ' "${common_args[@]}"); prompt_joined=${prompt_joined%% }
+                    agent_prompts+=("$prompt_joined")
+                else
+                    agent_prompts+=("")  # No prompt for this agent
+                fi
+                ;;
+            kimi)
+                # kimi: doesn't support direct interactive prompts
+                # Launch agent, then send prompt via AppleScript after startup
+                cmd_arr+=("$agent")
+                if [[ -n "$flags" ]]; then
+                    # shellcheck disable=SC2206
+                    local flag_array=($flags)
+                    cmd_arr+=("${flag_array[@]}")
+                fi
+                # Store prompt for delayed sending
+                if (( ${#common_args[@]} )); then
+                    local prompt_joined
+                    prompt_joined=$(printf '%s ' "${common_args[@]}"); prompt_joined=${prompt_joined%% }
+                    agent_prompts+=("$prompt_joined")
+                else
+                    agent_prompts+=("")  # No prompt for this agent
+                fi
                 ;;
             opencode)
                 # opencode: use --prompt to seed the TUI
@@ -801,6 +859,7 @@ run_multi_agents() {
                     prompt_joined=$(printf '%s ' "${common_args[@]}"); prompt_joined=${prompt_joined%% }
                     cmd_arr+=("--prompt" "$prompt_joined")
                 fi
+                agent_prompts+=("")  # opencode handles prompts via --prompt flag
                 ;;
             gemini|qwen)
                 # gemini/qwen: add -i when prompt present to remain interactive
@@ -815,6 +874,7 @@ run_multi_agents() {
                     prompt_joined=$(printf '%s ' "${common_args[@]}"); prompt_joined=${prompt_joined%% }
                     cmd_arr+=("-i" "$prompt_joined")
                 fi
+                agent_prompts+=("")  # gemini/qwen handle prompts via -i flag
                 ;;
             droid)
                 # droid: allow inline prompt to seed session
@@ -822,6 +882,7 @@ run_multi_agents() {
                 if (( ${#common_args[@]} )); then
                     cmd_arr+=("${common_args[@]}")
                 fi
+                agent_prompts+=("")  # droid handles prompts positionally
                 ;;
             *)
                 # Default: flags + positional prompt if provided
@@ -834,6 +895,7 @@ run_multi_agents() {
                 if (( ${#common_args[@]} )); then
                     cmd_arr+=("${common_args[@]}")
                 fi
+                agent_prompts+=("")  # default agents handle prompts positionally
                 ;;
         esac
 
@@ -845,19 +907,10 @@ run_multi_agents() {
         agent_paths+=("$YOLO_WORKTREE_PATH")
         agent_branches+=("$YOLO_BRANCH_NAME")
 
-        # If copilot, ensure the worktree directory is trusted via --add-dir
+        # If copilot or kimi, add --add-dir for worktree directory (copilot only)
         if [[ "$agent" == "copilot" ]]; then
-            local flags_str=""
-            if [[ -n "$flags" ]]; then flags_str="$flags"; fi
-            if (( ${#common_args[@]} )); then
-                local prompt_joined
-                prompt_joined=$(printf '%s ' "${common_args[@]}"); prompt_joined=${prompt_joined%% }
-                shell_cmd="copilot $flags_str --add-dir $(printf %q \"$YOLO_WORKTREE_PATH\") -p $(printf %q \"$prompt_joined\"); copilot $flags_str --add-dir $(printf %q \"$YOLO_WORKTREE_PATH\") --continue"
-            else
-                # Start interactive with directory trusted
-                # shellcheck disable=SC2206
-                cmd_arr=("copilot" $flags_str --add-dir "$YOLO_WORKTREE_PATH")
-            fi
+            # Add --add-dir to trust the worktree directory
+            cmd_arr+=(--add-dir "$YOLO_WORKTREE_PATH")
         fi
 
         # Return to the original directory to continue creating more worktrees
@@ -924,7 +977,9 @@ run_multi_agents() {
         done
 
         # Call Ghostty-specific implementation
-        print_debug "Calling run_multi_agents_ghostty with ${#wrapped_cmds[@]} commands"
+        # Pass prompts via global variable since bash can't pass multiple arrays
+        YOLO_AGENT_PROMPTS=("${agent_prompts[@]}")
+        print_debug "Calling run_multi_agents_ghostty with ${#wrapped_cmds[@]} commands and ${#agent_prompts[@]} prompts"
         run_multi_agents_ghostty "${wrapped_cmds[@]}"
         local ghostty_rc=$?
         print_debug "run_multi_agents_ghostty returned: $ghostty_rc"
