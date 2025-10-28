@@ -697,6 +697,7 @@ run_multi_agents_ghostty() {
     print_debug "Equalize splits exit code: $eq_rc"
 
     # Send delayed prompts to agents that need them (copilot, kimi)
+    # Run in background so agents can start first, avoiding input buffering
     if [[ -n "${YOLO_AGENT_PROMPTS:-}" ]] && (( ${#YOLO_AGENT_PROMPTS[@]} > 0 )); then
         print_debug "Checking for delayed prompts to send..."
         local has_prompts=false
@@ -709,55 +710,52 @@ run_multi_agents_ghostty() {
         done
 
         if [[ "$has_prompts" == "true" ]]; then
-            print_info "Waiting for agents to start before sending prompts..."
-            sleep 4  # kimi needs time to show welcome banner and be ready
+            print_info "Prompts will be sent in background after agents start..."
 
-            # Navigate back to first split (go left/up multiple times to ensure we're at split 0)
-            print_debug "Navigating to first split..."
-            for ((nav=0; nav<n; nav++)); do
-                osascript -e 'tell application "System Events" to tell process "Ghostty" to key code 123 using {command down, option down}' >/dev/null 2>&1
-                sleep 0.1
-                osascript -e 'tell application "System Events" to tell process "Ghostty" to key code 126 using {command down, option down}' >/dev/null 2>&1
-                sleep 0.1
-            done
+            # Spawn background job to send prompts after delay
+            (
+                sleep 4  # Wait for agents to fully start and display banners
 
-            # Send prompts to each split in order
-            for idx in "${!YOLO_AGENT_PROMPTS[@]}"; do
-                local prompt_text="${YOLO_AGENT_PROMPTS[$idx]}"
-                local agent_name="${YOLO_AGENT_NAMES[$idx]:-}"
+                # Navigate back to first split (go left/up multiple times to ensure we're at split 0)
+                for ((nav=0; nav<n; nav++)); do
+                    osascript -e 'tell application "System Events" to tell process "Ghostty" to key code 123 using {command down, option down}' >/dev/null 2>&1
+                    sleep 0.1
+                    osascript -e 'tell application "System Events" to tell process "Ghostty" to key code 126 using {command down, option down}' >/dev/null 2>&1
+                    sleep 0.1
+                done
 
-                if [[ -n "$prompt_text" ]]; then
-                    # Ensure split is focused before sending
-                    print_debug "Ensuring split $idx is focused..."
-                    sleep 0.3
+                # Send prompts to each split in order
+                for idx in "${!YOLO_AGENT_PROMPTS[@]}"; do
+                    local prompt_text="${YOLO_AGENT_PROMPTS[$idx]}"
+                    local agent_name="${YOLO_AGENT_NAMES[$idx]:-}"
 
-                    # copilot shows a dialog that needs to be dismissed first
-                    if [[ "$agent_name" == "copilot" ]]; then
-                        print_debug "Dismissing copilot dialog for split $idx"
-                        osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke return' >/dev/null 2>&1
+                    if [[ -n "$prompt_text" ]]; then
+                        # Ensure split is focused before sending
+                        sleep 0.3
+
+                        # copilot shows a dialog that needs to be dismissed first
+                        if [[ "$agent_name" == "copilot" ]]; then
+                            osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke return' >/dev/null 2>&1
+                            sleep 1
+                        fi
+
+                        send_ghostty_command "$prompt_text"
+
+                        # Wait for command to be processed before navigating away
                         sleep 1
                     fi
 
-                    print_debug "Sending delayed prompt to split $idx ($agent_name): $prompt_text"
-                    send_ghostty_command "$prompt_text"
-
-                    # Wait longer for command to be processed before navigating away
-                    print_debug "Waiting for command to be processed..."
-                    sleep 1
-                fi
-
-                # Navigate to next split (right if landscape, down if portrait)
-                if (( idx < n - 1 )); then
-                    if [[ "$is_landscape" == "true" ]]; then
-                        osascript -e 'tell application "System Events" to tell process "Ghostty" to key code 124 using {command down, option down}' >/dev/null 2>&1
-                    else
-                        osascript -e 'tell application "System Events" to tell process "Ghostty" to key code 125 using {command down, option down}' >/dev/null 2>&1
+                    # Navigate to next split (right if landscape, down if portrait)
+                    if (( idx < n - 1 )); then
+                        if [[ "$is_landscape" == "true" ]]; then
+                            osascript -e 'tell application "System Events" to tell process "Ghostty" to key code 124 using {command down, option down}' >/dev/null 2>&1
+                        else
+                            osascript -e 'tell application "System Events" to tell process "Ghostty" to key code 125 using {command down, option down}' >/dev/null 2>&1
+                        fi
+                        sleep 0.5
                     fi
-                    sleep 0.5
-                fi
-            done
-
-            print_success "Delayed prompts sent to agents"
+                done
+            ) &  # Run in background
         fi
     fi
 
