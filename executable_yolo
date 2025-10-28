@@ -710,7 +710,7 @@ run_multi_agents_ghostty() {
 
         if [[ "$has_prompts" == "true" ]]; then
             print_info "Waiting for agents to start before sending prompts..."
-            sleep 2
+            sleep 4  # kimi needs time to show welcome banner and be ready
 
             # Navigate back to first split (go left/up multiple times to ensure we're at split 0)
             print_debug "Navigating to first split..."
@@ -792,9 +792,9 @@ run_single_agent_ghostty_with_prompt() {
     send_ghostty_command "$agent_cmd"
 
     # Wait for agent to start and be ready for input
-    # Different agents may have different startup times
+    # Different agents may have different startup times (kimi needs ~4s for welcome banner)
     print_debug "Waiting for agent to start..."
-    sleep 2
+    sleep 4
 
     # copilot shows a dialog that needs to be dismissed first
     if [[ "$is_copilot" == "true" ]]; then
