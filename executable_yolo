@@ -1564,6 +1564,31 @@ main() {
                 fi
             fi
             ;;
+        opencode)
+            if (( ${#command_args[@]} )); then
+                local prompt_joined
+                prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
+                full_command=("$command_name" --prompt "$prompt_joined")
+            fi
+            ;;
+        gemini|qwen)
+            if [[ -n "$flags" ]]; then
+                # shellcheck disable=SC2206
+                local flag_array=($flags)
+                full_command+=("${flag_array[@]}")
+            fi
+            if (( ${#command_args[@]} )); then
+                local prompt_joined
+                prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
+                full_command+=("-i" "$prompt_joined")
+            fi
+            ;;
+        droid)
+            # droid: pass prompt positionally; no special flags
+            if (( ${#command_args[@]} )); then
+                full_command+=("${command_args[@]}")
+            fi
+            ;;
         crush)
             if (( ${#command_args[@]} )); then
                 local prompt_joined
@@ -1590,31 +1615,6 @@ main() {
                     local flag_array=($flags)
                     full_command+=("${flag_array[@]}")
                 fi
-            fi
-            ;;
-        opencode)
-            if (( ${#command_args[@]} )); then
-                local prompt_joined
-                prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
-                full_command=("$command_name" --prompt "$prompt_joined")
-            fi
-            ;;
-        gemini|qwen|crush)
-            if [[ -n "$flags" ]]; then
-                # shellcheck disable=SC2206
-                local flag_array=($flags)
-                full_command+=("${flag_array[@]}")
-            fi
-            if (( ${#command_args[@]} )); then
-                local prompt_joined
-                prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
-                full_command+=("-i" "$prompt_joined")
-            fi
-            ;;
-        droid)
-            # droid: pass prompt positionally; no special flags
-            if (( ${#command_args[@]} )); then
-                full_command+=("${command_args[@]}")
             fi
             ;;
         *)
