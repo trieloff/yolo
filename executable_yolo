@@ -102,6 +102,7 @@ Supported Commands:
   qwen              Uses --yolo; adds -i when prompt present
   kimi              Uses --yolo (requires Ghostty for interactive prompts)
   opencode          No extra flags added
+  crush             Uses --yolo (requires Ghostty for interactive prompts)
   <other>           Adds --yolo (generic fallback)
 
 Multi-agent Mode:
@@ -288,6 +289,10 @@ get_command_flags() {
             # kimi uses --yolo for auto-approval
             echo "--yolo"
             ;;
+        crush)
+            # crush uses --yolo for auto-approval
+            echo "--yolo"
+            ;;
         *)
             echo "--yolo"
             ;;
@@ -302,7 +307,7 @@ command_exists() {
 # Get all installed supported coding agents
 get_installed_agents() {
     local agents=()
-    local supported_commands=("codex" "claude" "copilot" "droid" "amp" "cursor-agent" "opencode" "qwen" "gemini" "kimi")
+    local supported_commands=("codex" "claude" "copilot" "droid" "amp" "cursor-agent" "opencode" "qwen" "gemini" "kimi" "crush")
 
     for cmd in "${supported_commands[@]}"; do
         if command_exists "$cmd"; then
@@ -937,6 +942,23 @@ run_multi_agents() {
                 fi
                 agent_prompts+=("")  # gemini/qwen handle prompts via -i flag
                 ;;
+            crush)
+                # crush: no -i flag, so use delayed prompt sending like kimi
+                cmd_arr+=("$agent")
+                if [[ -n "$flags" ]]; then
+                    # shellcheck disable=SC2206
+                    local flag_array=($flags)
+                    cmd_arr+=("${flag_array[@]}")
+                fi
+                # Store prompt for delayed sending via AppleScript
+                if (( ${#common_args[@]} )); then
+                    local prompt_joined
+                    prompt_joined=$(printf '%s ' "${common_args[@]}"); prompt_joined=${prompt_joined%% }
+                    agent_prompts+=("$prompt_joined")
+                else
+                    agent_prompts+=("")  # No prompt for this agent
+                fi
+                ;;
             droid)
                 # droid: allow inline prompt to seed session
                 cmd_arr+=("$agent")
@@ -1093,7 +1115,7 @@ pick_random_agent() {
 
     if [[ ${#agents[@]} -eq 0 ]]; then
         print_error "no supported coding agents found in PATH"
-        print_info "Supported agents: codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini, kimi"
+        print_info "Supported agents: codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini, kimi, crush"
         return 1
     fi
 
@@ -1178,7 +1200,7 @@ mop_cleanup() {
             print_success "Deleted branch: $branch"
             ((branch_count++))
         fi
-    done < <(git branch | sed 's/^[* ] //' | grep -E '^(claude|codex|copilot|amp|opencode|gemini|qwen|droid|cursor-agent|kimi)-[0-9]+$')
+    done < <(git branch | sed 's/^[* ] //' | grep -E '^(claude|codex|copilot|amp|opencode|gemini|qwen|droid|cursor-agent|kimi|crush)-[0-9]+$')
 
     if (( branch_count == 0 )); then
         print_info "No agent branches found"
@@ -1384,7 +1406,7 @@ main() {
         
         if [[ ${#all_agents[@]} -eq 0 ]]; then
             print_error "no supported coding agents found in PATH"
-            print_info "Supported agents: codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini, kimi"
+            print_info "Supported agents: codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini, kimi, crush"
             exit 1
         fi
         
@@ -1565,6 +1587,34 @@ main() {
             # droid: pass prompt positionally; no special flags
             if (( ${#command_args[@]} )); then
                 full_command+=("${command_args[@]}")
+            fi
+            ;;
+        crush)
+            if (( ${#command_args[@]} )); then
+                local prompt_joined
+                prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
+                local flags_str=""
+                if [[ -n "$flags" ]]; then flags_str="$flags"; fi
+
+                # crush doesn't have -i flag, use delayed prompt sending like kimi
+                # Use Ghostty split method for proper interactive experience
+                if is_ghostty; then
+                    local agent_cmd
+                    agent_cmd="crush $flags_str"
+                    run_single_agent_ghostty_with_prompt "$agent_cmd" "$prompt_joined"
+                    exit $?
+                else
+                    print_error "crush with prompts requires Ghostty terminal for interactive mode"
+                    print_info "Either run in Ghostty or launch crush without a prompt"
+                    exit 1
+                fi
+            else
+                # No prompt - just launch interactively
+                if [[ -n "$flags" ]]; then
+                    # shellcheck disable=SC2206
+                    local flag_array=($flags)
+                    full_command+=("${flag_array[@]}")
+                fi
             fi
             ;;
         *)
