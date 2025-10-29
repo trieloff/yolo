@@ -153,7 +153,7 @@ test_command_flags() {
         "opencode:"  # no extra flags
         "qwen:--yolo"
         "kimi:--yolo"
-        "aider:--yes-always" 
+        "aider:--yes-always --no-auto-commit"
         "unknown-tool:--yolo"
     )
 
