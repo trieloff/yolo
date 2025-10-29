@@ -48,8 +48,7 @@ YOLO now automatically detects when it's running inside Kimi CLI and provides en
 
 When YOLO detects it's running inside Kimi CLI, you'll see:
 ```
-Detected Kimi CLI environment!
-YOLO is running inside Kimi CLI - enhanced integration enabled
+Detected Kimi CLI environment! YOLO is running inside Kimi CLI - enhanced integration enabled
 ```
 
 ## Installation
