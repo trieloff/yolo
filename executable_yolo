@@ -302,14 +302,6 @@ get_command_flags() {
             # aider uses --yes-always for auto-approval
             echo "--yes-always"
             ;;
-        aider)
-            # aider uses --yes-always for auto-approval
-            echo "--yes-always"
-            ;;
-        aider)
-            # aider uses --yes-always for auto-approval
-            echo "--yes-always"
-            ;;
         *)
             echo "--yolo"
             ;;

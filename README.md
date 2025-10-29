@@ -233,6 +233,8 @@ Use `--mop` to clean up orphaned worktrees from interrupted sessions or when you
 yolo aider "add authentication middleware" # Run aider with auto-approval
 yolo -w aider "implement feature" # Create worktree for aider session
 yolo -e aider # Compose complex prompt in editor for aider
+yolo -w -c aider "quick experiment" # Create worktree, auto-cleanup after
+yolo -w -nc aider "keep this work" # Create worktree, preserve it after
 
 # Full YOLO mode - random agent selection
 yolo
