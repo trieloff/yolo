@@ -223,7 +223,6 @@ Use `--mop` to clean up orphaned worktrees from interrupted sessions or when you
 | `qwen` | `--yolo` (+ `-i` when prompt present) |
 | `kimi` | `--yolo` (+ `--command` when prompt present) |
 | `crush` | `--yolo` (+ Ghostty injection when prompt present) |
-| `aider` | `--yes-always` |
 | *(other)* | `--yolo` |
 
 ### Examples

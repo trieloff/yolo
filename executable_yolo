@@ -135,10 +135,8 @@ Examples:
   yolo -w -nc claude "keep this"   # Create worktree, preserve it after
   yolo -e codex,claude,gemini      # Compose prompt in editor, run 3 agents in parallel
   yolo copilot chat                # Run copilot chat with safety flags disabled
-  yolo aider                       # Run aider with --yes-always
+  yolo aider "add auth"            # Run aider with auto-approval
   yolo -w aider "implement feature" # Create worktree, run aider with prompt
-  yolo aider "add authentication middleware" # Run aider with auto-approval
-  yolo -e aider # Compose complex prompt in editor for aider
 
 Worktree Mode:
   When using -w/--worktree flag:
@@ -300,7 +298,7 @@ get_command_flags() {
             ;;
         aider)
             # aider uses --yes-always for auto-approval
-            echo "--yes-always --no-auto-commit"
+            echo "--yes-always"
             ;;
         *)
             echo "--yolo"
@@ -785,10 +783,9 @@ run_multi_agents_ghostty() {
 run_single_agent_ghostty_with_prompt() {
     local agent_cmd="$1"
     local prompt_text="$2"
-    local is_copilot="${3:-false}"
     local is_aider=false
     [[ "$agent_cmd" == *"aider"* ]] && is_aider=true
-    local is_copilot=false
+    local is_copilot="${3:-false}"
     [[ "$agent_cmd" == *"copilot"* ]] && is_copilot=true
 
     if ! is_ghostty; then
@@ -813,18 +810,15 @@ run_single_agent_ghostty_with_prompt() {
     sleep 4
 
     # Handle agents that need initial dialog dismissal
-    if [[ "$is_copilot" == "true" || "$is_aider" == "true" ]]; then
-        print_debug "Dismissing copilot/aider dialog..."
-        # Send two returns to get past initial prompts
+    if [[ "$is_copilot" == "true" ]]; then
+        print_debug "Dismissing copilot dialog..."
         osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke return' >/dev/null 2>&1
-        sleep 0.5
-        osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke return' >/dev/null 2>&1 
         sleep 1
-        # For aider, send another return to get past the initial prompt
-        if [[ "$is_aider" == "true" ]]; then
-            osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke return' >/dev/null 2>&1
-            sleep 1
-        fi
+    elif [[ "$is_aider" == "true" ]]; then
+        print_debug "Dismissing aider dialog..."
+        # Aider needs just one return
+        osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke return' >/dev/null 2>&1
+        sleep 1
     fi
 
     # Send the prompt
@@ -897,4 +891,819 @@ run_multi_agents() {
                     cmd_arr+=("$agent")
                     if [[ -n "$flags" ]]; then
                         # shellcheck disable=SC2206
-                        local flag_array=($flags
+                        local flag_array=($flags)
+                        cmd_arr+=("${flag_array[@]}")
+                    fi
+                fi
+                agent_prompts+=("")  # amp handles prompts via stdin, not delayed
+                ;;
+            copilot)
+                # Copilot: doesn't support direct interactive prompts
+                # Launch agent, then send prompt via AppleScript after startup
+                cmd_arr+=("$agent")
+                if [[ -n "$flags" ]]; then
+                    # shellcheck disable=SC2206
+                    local flag_array=($flags)
+                    cmd_arr+=("${flag_array[@]}")
+                fi
+                # Store prompt for delayed sending
+                if (( ${#common_args[@]} )); then
+                    local prompt_joined
+                    prompt_joined=$(printf '%s ' "${common_args[@]}"); prompt_joined=${prompt_joined%% }
+                    agent_prompts+=("$prompt_joined")
+                else
+                    agent_prompts+=("")  # No prompt for this agent
+                fi
+                ;;
+            kimi)
+                # kimi: --command exits after execution, so use delayed prompt sending
+                cmd_arr+=("$agent")
+                if [[ -n "$flags" ]]; then
+                    # shellcheck disable=SC2206
+                    local flag_array=($flags)
+                    cmd_arr+=("${flag_array[@]}")
+                fi
+                # Store prompt for delayed sending via AppleScript
+                if (( ${#common_args[@]} )); then
+                    local prompt_joined
+                    prompt_joined=$(printf '%s ' "${common_args[@]}"); prompt_joined=${prompt_joined%% }
+                    agent_prompts+=("$prompt_joined")
+                else
+                    agent_prompts+=("")  # No prompt for this agent
+                fi
+                ;;
+            opencode)
+                # opencode: use --prompt to seed the TUI
+                cmd_arr+=("$agent")
+                if (( ${#common_args[@]} )); then
+                    local prompt_joined
+                    prompt_joined=$(printf '%s ' "${common_args[@]}"); prompt_joined=${prompt_joined%% }
+                    cmd_arr+=("--prompt" "$prompt_joined")
+                fi
+                agent_prompts+=("")  # opencode handles prompts via --prompt flag
+                ;;
+            gemini|qwen)
+                # gemini/qwen: add -i when prompt present to remain interactive
+                cmd_arr+=("$agent")
+                if [[ -n "$flags" ]]; then
+                    # shellcheck disable=SC2206
+                    local flag_array=($flags)
+                    cmd_arr+=("${flag_array[@]}")
+                fi
+                if (( ${#common_args[@]} )); then
+                    local prompt_joined
+                    prompt_joined=$(printf '%s ' "${common_args[@]}"); prompt_joined=${prompt_joined%% }
+                    cmd_arr+=("-i" "$prompt_joined")
+                fi
+                agent_prompts+=("")  # gemini/qwen handle prompts via -i flag
+                ;;
+            crush)
+                # crush: no -i flag, so use delayed prompt sending like kimi
+                cmd_arr+=("$agent")
+                if [[ -n "$flags" ]]; then
+                    # shellcheck disable=SC2206
+                    local flag_array=($flags)
+                    cmd_arr+=("${flag_array[@]}")
+                fi
+                # Store prompt for delayed sending via AppleScript
+                if (( ${#common_args[@]} )); then
+                    local prompt_joined
+                    prompt_joined=$(printf '%s ' "${common_args[@]}"); prompt_joined=${prompt_joined%% }
+                    agent_prompts+=("$prompt_joined")
+                else
+                    agent_prompts+=("")  # No prompt for this agent
+                fi
+                ;;
+            droid)
+                # droid: allow inline prompt to seed session
+                cmd_arr+=("$agent")
+                if (( ${#common_args[@]} )); then
+                    cmd_arr+=("${common_args[@]}")
+                fi
+                agent_prompts+=("")  # droid handles prompts positionally
+                ;;
+            *)
+                # Default: flags + positional prompt if provided
+                cmd_arr+=("$agent")
+                if [[ -n "$flags" ]]; then
+                    # shellcheck disable=SC2206
+                    local flag_array=($flags)
+                    cmd_arr+=("${flag_array[@]}")
+                fi
+                if (( ${#common_args[@]} )); then
+                    cmd_arr+=("${common_args[@]}")
+                fi
+                agent_prompts+=("")  # default agents handle prompts positionally
+                ;;
+        esac
+
+        # Create dedicated worktree for each agent
+        if ! create_worktree "$agent"; then
+            return 1
+        fi
+        # create_worktree sets globals: YOLO_WORKTREE_PATH, YOLO_BRANCH_NAME, YOLO_REPO_ROOT
+        agent_paths+=("$YOLO_WORKTREE_PATH")
+        agent_branches+=("$YOLO_BRANCH_NAME")
+
+        # If copilot or kimi, add --add-dir for worktree directory (copilot only)
+        if [[ "$agent" == "copilot" ]]; then
+            # Add --add-dir to trust the worktree directory
+            cmd_arr+=(--add-dir "$YOLO_WORKTREE_PATH")
+        fi
+
+        # Return to the original directory to continue creating more worktrees
+        cd "$start_pwd"
+
+        if [[ -n "$shell_cmd" ]]; then
+            agent_cmds+=("$shell_cmd")
+        else
+            # Use join_for_typing for Ghostty (commands are typed), join_escaped for others (shell execution)
+            if [[ "$mux" == "ghostty" ]]; then
+                agent_cmds+=("$(join_for_typing "${cmd_arr[@]}")")
+            else
+                agent_cmds+=("$(join_escaped "${cmd_arr[@]}")")
+            fi
+        fi
+    done
+
+    local n; n=${#agent_cmds[@]}
+    local rows cols
+    read -r rows cols < <(detect_terminal_size)
+    local grid_r grid_c
+    read -r grid_r grid_c < <(compute_grid_for_n "$n")
+
+    if [[ "$dry_run_flag" == "true" ]]; then
+        print_info "Dry-run: would launch $n agents in $mux using a ${grid_r}x${grid_c} grid ($rows x $cols terminal)"
+        local i
+        for i in "${!agent_cmds[@]}"; do
+            echo "- ${clean_agents[$i]} @ ${agent_paths[$i]}: ${agent_cmds[$i]}"
+        done
+        return 0
+    fi
+
+    if [[ "$mux" == ghostty ]]; then
+        print_info "Using Ghostty native splits for $n agents"
+        print_debug "Building wrapped commands for $n agents"
+
+        # Get repo root for cleanup
+        local repo_root
+        repo_root="$(get_repo_root)"
+
+        # Build shell wrapper commands with automatic cleanup
+        local -a wrapped_cmds=()
+        local i
+        for i in "${!agent_cmds[@]}"; do
+            local worktree_path="${agent_paths[$i]}"
+            local branch_name="${agent_branches[$i]}"
+            local is_first_split=$((i == 0))
+
+            # Build cleanup script that runs after agent exits
+            local cleanup_script
+            cleanup_script="cd $(printf %q "$repo_root"); git worktree remove $(printf %q "$worktree_path") --force; git branch -D $(printf %q "$branch_name")"
+
+            # Add exit command for non-first splits to close them after cleanup
+            if [[ "$is_first_split" == "0" ]]; then
+                cleanup_script="$cleanup_script; exit"
+            fi
+
+            # Create wrapped command: cd to worktree, run agent, then cleanup
+            local wrapped
+            wrapped="cd $(printf %q "$worktree_path"); ${agent_cmds[$i]}; $cleanup_script"
+
+            print_debug "Wrapped command $i: $wrapped"
+            wrapped_cmds+=("$wrapped")
+        done
+
+        # Call Ghostty-specific implementation
+        # Pass prompts and agent names via global variables since bash can't pass multiple arrays
+        YOLO_AGENT_PROMPTS=("${agent_prompts[@]}")
+        YOLO_AGENT_NAMES=("${clean_agents[@]}")
+        print_debug "Calling run_multi_agents_ghostty with ${#wrapped_cmds[@]} commands and ${#agent_prompts[@]} prompts"
+        run_multi_agents_ghostty "${wrapped_cmds[@]}"
+        local ghostty_rc=$?
+        print_debug "run_multi_agents_ghostty returned: $ghostty_rc"
+
+        # Inform user about automatic cleanup
+        print_info "Agents running in worktrees (auto-cleanup enabled):"
+        local j
+        for j in "${!agent_branches[@]}"; do
+            print_info "  ${clean_agents[$j]}: ${agent_paths[$j]} (branch: ${agent_branches[$j]})"
+        done
+        print_success "When you exit an agent, its worktree will be automatically cleaned up"
+
+        print_debug "run_multi_agents returning 0 from ghostty block"
+        return 0
+    fi
+
+    # After session exits, handle cleanup
+    if [[ -n "$auto_clean" ]]; then
+        local repo_root
+        repo_root="$(get_repo_root)"
+        if [[ "$auto_clean" == "yes" ]]; then
+            local j
+            for j in "${!agent_branches[@]}"; do
+                cleanup_worktree "${agent_branches[$j]}" "${agent_paths[$j]}" "$repo_root"
+            done
+        elif [[ "$auto_clean" == "no" ]]; then
+            local j
+            for j in "${!agent_branches[@]}"; do
+                print_info "Worktree preserved at: ${agent_paths[$j]} (branch ${agent_branches[$j]})"
+            done
+        else
+            local j
+            for j in "${!agent_branches[@]}"; do
+                prompt_cleanup "${agent_branches[$j]}" "${agent_paths[$j]}" "$repo_root"
+            done
+        fi
+    fi
+
+    return 0
+}
+
+# Pick a random agent from installed agents
+pick_random_agent() {
+    local -a agents
+    local agent
+    while IFS= read -r agent; do
+        agents+=("$agent")
+    done < <(get_installed_agents)
+
+    if [[ ${#agents[@]} -eq 0 ]]; then
+        print_error "no supported coding agents found in PATH"
+        print_info "Supported agents: codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini, kimi, crush"
+        return 1
+    fi
+
+    # Use RANDOM to pick a random index
+    local random_index=$((RANDOM % ${#agents[@]}))
+    echo "${agents[$random_index]}"
+}
+
+# Clean up worktree and branch
+# Mop up all YOLO worktrees, branches, and processes
+mop_cleanup() {
+    print_info "YOLO Mop: Cleaning up all worktrees, branches, and processes"
+
+    local repo_root
+    repo_root="$(get_repo_root)"
+    if [[ -z "$repo_root" ]]; then
+        print_error "Not in a git repository"
+        return 1
+    fi
+
+    cd "$repo_root" || return 1
+
+    local yolo_dir="$repo_root/.yolo"
+
+    # Find all processes running in .yolo directories
+    print_info "Checking for processes running in .yolo directories..."
+    local pids=()
+    if [[ -d "$yolo_dir" ]]; then
+        while IFS= read -r pid; do
+            if [[ -n "$pid" ]]; then
+                pids+=("$pid")
+            fi
+        done < <(lsof +D "$yolo_dir" 2>/dev/null | tail -n +2 | awk '{print $2}' | sort -u)
+
+        if (( ${#pids[@]} > 0 )); then
+            print_warning "Found ${#pids[@]} process(es) running in .yolo directories"
+            for pid in "${pids[@]}"; do
+                local cmd
+                cmd="$(ps -p "$pid" -o command= 2>/dev/null || echo "unknown")"
+                print_info "  PID $pid: ${cmd:0:80}"
+            done
+            read -r -p "Kill these processes? (y/n): " response
+            if [[ "$response" =~ ^[Yy]$ ]]; then
+                for pid in "${pids[@]}"; do
+                    if kill "$pid" 2>/dev/null; then
+                        print_success "Killed process $pid"
+                    else
+                        print_warning "Failed to kill process $pid (may need sudo)"
+                    fi
+                done
+                sleep 1
+            fi
+        else
+            print_info "No processes found"
+        fi
+    fi
+
+    # Remove all worktrees in .yolo/
+    print_info "Removing all .yolo worktrees..."
+    local removed_count=0
+    while IFS= read -r worktree_path; do
+        if [[ "$worktree_path" =~ \.yolo/ ]]; then
+            if git worktree remove "$worktree_path" --force 2>/dev/null; then
+                print_success "Removed: $worktree_path"
+                ((removed_count++))
+            else
+                print_warning "Failed to remove: $worktree_path"
+            fi
+        fi
+    done < <(git worktree list --porcelain | grep "^worktree " | cut -d' ' -f2)
+
+    if (( removed_count == 0 )); then
+        print_info "No worktrees found"
+    fi
+
+    # Delete all branches that were associated with worktrees
+    print_info "Deleting associated branches..."
+    local branch_count=0
+    while IFS= read -r branch; do
+        # Look for branches that match agent naming patterns or have .yolo in description
+        if git branch -D "$branch" 2>/dev/null; then
+            print_success "Deleted branch: $branch"
+            ((branch_count++))
+        fi
+    done < <(git branch | sed 's/^[* ] //' | grep -E '^(claude|codex|copilot|amp|opencode|gemini|qwen|droid|cursor-agent|kimi|crush)-[0-9]+$')
+
+    if (( branch_count == 0 )); then
+        print_info "No agent branches found"
+    fi
+
+    # Remove .yolo directory if empty
+    if [[ -d "$yolo_dir" ]]; then
+        if [[ -z "$(ls -A "$yolo_dir")" ]]; then
+            rmdir "$yolo_dir"
+            print_success "Removed empty .yolo directory"
+        else
+            print_warning ".yolo directory still contains files"
+            ls -la "$yolo_dir"
+        fi
+    fi
+
+    print_success "Mop complete!"
+    return 0
+}
+
+cleanup_worktree() {
+    local branch_name="$1"
+    local worktree_path="$2"
+    local repo_root="$3"
+
+    print_info "Cleaning up worktree..."
+
+    # Go back to repository root
+    cd "$repo_root" || {
+        print_error "failed to return to repository root"
+        return 1
+    }
+
+    # Remove the worktree
+    if git worktree remove "$worktree_path" 2>/dev/null; then
+        print_success "Removed worktree: $worktree_path"
+    else
+        print_warning "Failed to remove worktree (may need manual cleanup)"
+    fi
+
+    # Delete the branch
+    if git branch -D "$branch_name" >/dev/null 2>&1; then
+        print_success "Deleted branch: $branch_name"
+    else
+        print_warning "Failed to delete branch (may need manual cleanup)"
+    fi
+
+    return 0
+}
+
+# Prompt user for cleanup
+prompt_cleanup() {
+    local branch_name="$1"
+    local worktree_path="$2"
+    local repo_root="$3"
+
+    echo ""
+    print_info "Worktree session completed."
+    read -r -p "Clean up worktree and branch? (Y/n): " response
+
+    case "$response" in
+        [nN]|[nN][oO])
+            print_info "Worktree preserved at: $worktree_path"
+            print_info "To clean up later, run:"
+            echo "  git worktree remove $worktree_path"
+            echo "  git branch -D $branch_name"
+            ;;
+        *)
+            cleanup_worktree "$branch_name" "$worktree_path" "$repo_root"
+            ;;
+    esac
+}
+
+# Launch editor to compose prompt
+# Returns: prompt text via stdout
+launch_editor_for_prompt() {
+    local editor="${EDITOR:-vi}"
+    local tmpfile
+    tmpfile="$(mktemp -t yolo-prompt-XXXXXX.txt)"
+
+    # Add helpful comment to temp file
+    cat > "$tmpfile" << 'EOF'
+# Enter your prompt below this line.
+# Lines starting with # will be removed.
+
+
+EOF
+
+    # Launch editor
+    if ! "$editor" "$tmpfile"; then
+        rm -f "$tmpfile"
+        print_error "Editor exited with error"
+        return 1
+    fi
+
+    # Read content, removing comment lines and trailing newlines
+    local content
+    content="$(grep -v '^#' "$tmpfile" | sed -e :a -e '/^\n*$/{ $d; N; ba' -e '}')"
+
+    rm -f "$tmpfile"
+
+    if [[ -z "$content" ]]; then
+        print_error "No prompt entered"
+        return 1
+    fi
+
+    echo "$content"
+    return 0
+}
+
+# Main function
+main() {
+    local use_worktree=false
+    local dry_run=false
+    local auto_clean=""
+    local use_editor=false
+    local use_waddan=false
+    local command_name=""
+    local command_args=()
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -h|--help)
+                show_usage
+                exit 0
+                ;;
+            -v|--version)
+                show_version
+                exit 0
+                ;;
+            -w|--worktree)
+                use_worktree=true
+                shift
+                ;;
+            -c|--clean)
+                auto_clean="yes"
+                shift
+                ;;
+            -nc|--no-clean)
+                auto_clean="no"
+                shift
+                ;;
+            -e|--editor)
+                use_editor=true
+                shift
+                ;;
+            -a|--all-agents|--waddan)
+                use_waddan=true
+                shift
+                ;;
+            -n|--dry-run)
+                dry_run=true
+                shift
+                ;;
+            -m|--mop)
+                mop_cleanup
+                exit 0
+                ;;
+            -s|--split-only)
+                shift
+                if [[ -z "$1" || ! "$1" =~ ^[0-9]+$ ]]; then
+                    print_error "--split-only requires a number argument"
+                    exit 1
+                fi
+                test_ghostty_splits "$1"
+                exit $?
+                ;;
+            -*)
+                print_error "unknown option: $1"
+                echo ""
+                show_usage
+                exit 1
+                ;;
+            *)
+                # First non-option argument is the command
+                if [[ -z "$command_name" ]]; then
+                    command_name="$1"
+                    shift
+                    # All remaining arguments are passed to the command
+                    command_args=("$@")
+                    break
+                fi
+                ;;
+        esac
+    done
+
+    # Detect if running inside Kimi CLI and show informative message
+    if is_kimi_cli; then
+        print_info "Detected Kimi CLI environment!"
+        print_info "YOLO is running inside Kimi CLI - enhanced integration enabled"
+        print_info ""
+    fi
+
+    # Handle -a/--all-agents/--waddan mode: launch all available agents
+    if [[ "$use_waddan" == "true" ]]; then
+        print_info "All-agents mode activated! Launching all available agents..."
+        local -a all_agents
+        local agent
+        while IFS= read -r agent; do
+            all_agents+=("$agent")
+        done < <(get_installed_agents)
+        
+        if [[ ${#all_agents[@]} -eq 0 ]]; then
+            print_error "no supported coding agents found in PATH"
+            print_info "Supported agents: codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini, kimi, crush"
+            exit 1
+        fi
+        
+        # Join agents with commas
+        local agent_csv
+        agent_csv=$(IFS=','; echo "${all_agents[*]}")
+        print_success "Found ${#all_agents[@]} agents: $agent_csv"
+        
+        # Collect remaining arguments as prompt if provided
+        local -a waddan_args=()
+        if [[ -n "$command_name" ]]; then
+            waddan_args=("$command_name")
+            if (( ${#command_args[@]} > 0 )); then
+                waddan_args+=("${command_args[@]}")
+            fi
+        fi
+        
+        run_multi_agents "$agent_csv" "$dry_run" "$auto_clean" "${waddan_args[@]+"${waddan_args[@]}"}"
+        exit $?
+    fi
+
+    # If no command was provided, pick a random one (full yolo mode!)
+    if [[ -z "$command_name" ]]; then
+        print_info "Full YOLO mode activated! Picking a random coding agent..."
+        command_name="$(pick_random_agent)" || exit 1
+        print_success "Selected: $command_name"
+        print_info ""
+    fi
+
+    # Launch editor to compose prompt if -e flag was provided
+    if [[ "$use_editor" == "true" ]]; then
+        if (( ${#command_args[@]} > 0 )); then
+            print_warning "Ignoring command-line prompt arguments in favor of editor"
+        fi
+        print_info "Launching editor to compose prompt..."
+        local editor_prompt
+        if ! editor_prompt="$(launch_editor_for_prompt)"; then
+            exit 1
+        fi
+        # Split editor content into array by lines for proper quoting
+        command_args=("$editor_prompt")
+        print_success "Prompt captured from editor"
+    fi
+
+    # Determine mode based on command_name format:
+    # - Contains spaces: it's a prompt → full YOLO mode
+    # - Contains commas (no spaces): multi-agent mode (agent1,agent2,agent3)
+    # - Single word: single-agent mode
+    if [[ "$command_name" == *" "* ]]; then
+        # It's a prompt with spaces, treat as full YOLO mode
+        print_info "Full YOLO mode activated! Picking a random coding agent..."
+        command_args=("$command_name")
+        command_name="$(pick_random_agent)" || exit 1
+        print_success "Selected: $command_name"
+        print_info ""
+    elif [[ "$command_name" == *","* ]]; then
+        # Multi-agent mode: comma-separated list
+        run_multi_agents "$command_name" "$dry_run" "$auto_clean" "${command_args[@]+"${command_args[@]}"}"
+        exit $?
+    fi
+
+    # Check if command exists
+    if ! command_exists "$command_name"; then
+        print_warning "command '$command_name' not found in PATH"
+        print_info "Will attempt to run it anyway..."
+    fi
+
+    # Create worktree if requested
+    if [[ "$use_worktree" == "true" ]]; then
+        if ! create_worktree "$command_name"; then
+            exit 1
+        fi
+        # create_worktree sets YOLO_BRANCH_NAME, YOLO_WORKTREE_PATH, YOLO_REPO_ROOT
+    fi
+
+    # Build the final command (single-agent mode) with agent-specific argument semantics
+    local flags; flags="$(get_command_flags "$command_name")"
+    local full_command; full_command=("$command_name")
+
+    case "$command_name" in
+        amp)
+            if (( ${#command_args[@]} )); then
+                local prompt_joined
+                prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
+                if [[ -n "$flags" ]]; then
+                    full_command=(bash -lc "echo $(printf %q "$prompt_joined") | amp $flags")
+                else
+                    full_command=(bash -lc "echo $(printf %q "$prompt_joined") | amp")
+                fi
+            else
+                if [[ -n "$flags" ]]; then
+                    # shellcheck disable=SC2206
+                    local flag_array=($flags)
+                    full_command+=("${flag_array[@]}")
+                fi
+            fi
+            ;;
+        copilot)
+            if (( ${#command_args[@]} )); then
+                local prompt_joined
+                prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
+                local flags_str=""
+                if [[ -n "$flags" ]]; then flags_str="$flags"; fi
+                # Trust the current directory explicitly
+                local trust_dir
+                trust_dir=$(pwd)
+
+                # Use Ghostty split method if available for cleaner interactive experience
+                if is_ghostty; then
+                    local agent_cmd
+                    agent_cmd="copilot $flags_str --add-dir $(printf %q \"$trust_dir\")"
+                    run_single_agent_ghostty_with_prompt "$agent_cmd" "$prompt_joined" "true"
+                    exit $?
+                else
+                    # Fallback to one-shot + continue for non-Ghostty terminals
+                    full_command=(bash -lc "copilot $flags_str --add-dir $(printf %q \"$trust_dir\") -p $(printf %q \"$prompt_joined\"); copilot $flags_str --add-dir $(printf %q \"$trust_dir\") --continue")
+                fi
+            else
+                if [[ -n "$flags" ]]; then
+                    # shellcheck disable=SC2206
+                    local flag_array=($flags)
+                    full_command+=("${flag_array[@]}")
+                fi
+                # Trust current dir for interactive session
+                local trust_dir
+                trust_dir=$(pwd)
+                full_command+=(--add-dir "$trust_dir")
+            fi
+            ;;
+        kimi)
+            if (( ${#command_args[@]} )); then
+                local prompt_joined
+                prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
+                local flags_str=""
+                if [[ -n "$flags" ]]; then flags_str="$flags"; fi
+
+                # kimi --command exits after execution, not interactive
+                # Use Ghostty split method for proper interactive experience
+                if is_ghostty; then
+                    local agent_cmd
+                    agent_cmd="kimi $flags_str"
+                    run_single_agent_ghostty_with_prompt "$agent_cmd" "$prompt_joined"
+                    exit $?
+                else
+                    print_error "kimi with prompts requires Ghostty terminal for interactive mode"
+                    print_info "Either run in Ghostty or launch kimi without a prompt"
+                    exit 1
+                fi
+            else
+                # No prompt - just launch interactively
+                if [[ -n "$flags" ]]; then
+                    # shellcheck disable=SC2206
+                    local flag_array=($flags)
+                    full_command+=("${flag_array[@]}")
+                fi
+            fi
+            ;;
+        opencode)
+            if (( ${#command_args[@]} )); then
+                local prompt_joined
+                prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
+                full_command=("$command_name" --prompt "$prompt_joined")
+            fi
+            ;;
+        gemini|qwen)
+            if [[ -n "$flags" ]]; then
+                # shellcheck disable=SC2206
+                local flag_array=($flags)
+                full_command+=("${flag_array[@]}")
+            fi
+            if (( ${#command_args[@]} )); then
+                local prompt_joined
+                prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
+                full_command+=("-i" "$prompt_joined")
+            fi
+            ;;
+        droid)
+            # droid: pass prompt positionally; no special flags
+            if (( ${#command_args[@]} )); then
+                full_command+=("${command_args[@]}")
+            fi
+            ;;
+        crush)
+            if (( ${#command_args[@]} )); then
+                local prompt_joined
+                prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
+                local flags_str=""
+                if [[ -n "$flags" ]]; then flags_str="$flags"; fi
+
+                # crush doesn't have -i flag, use delayed prompt sending like kimi
+                # Use Ghostty split method for proper interactive experience
+                if is_ghostty; then
+                    local agent_cmd
+                    agent_cmd="crush $flags_str"
+                    run_single_agent_ghostty_with_prompt "$agent_cmd" "$prompt_joined"
+                    exit $?
+                else
+                    print_error "crush with prompts requires Ghostty terminal for interactive mode"
+                    print_info "Either run in Ghostty or launch crush without a prompt"
+                    exit 1
+                fi
+            else
+                # No prompt - just launch interactively
+                if [[ -n "$flags" ]]; then
+                    # shellcheck disable=SC2206
+                    local flag_array=($flags)
+                    full_command+=("${flag_array[@]}")
+                fi
+            fi
+            ;;
+        aider)
+            if (( ${#command_args[@]} )); then
+                local prompt_joined
+                prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
+                local flags_str=""
+                if [[ -n "$flags" ]]; then flags_str="$flags"; fi
+
+                # aider needs delayed prompt sending like kimi/crush
+                # Use Ghostty split method for proper interactive experience
+                if is_ghostty; then
+                    local agent_cmd
+                    agent_cmd="aider $flags_str"
+                    run_single_agent_ghostty_with_prompt "$agent_cmd" "$prompt_joined"
+                    exit $?
+                else
+                    print_error "aider with prompts requires Ghostty terminal for interactive mode"
+                    print_info "Either run in Ghostty or launch aider without a prompt"
+                    exit 1
+                fi
+            else
+                # No prompt - just launch interactively
+                if [[ -n "$flags" ]]; then
+                    # shellcheck disable=SC2206
+                    local flag_array=($flags)
+                    full_command+=("${flag_array[@]}")
+                fi
+            fi
+            ;;
+        *)
+            if [[ -n "$flags" ]]; then
+                # shellcheck disable=SC2206
+                local flag_array=($flags)
+                full_command+=("${flag_array[@]}")
+            fi
+            if (( ${#command_args[@]} )); then
+                full_command+=("${command_args[@]}")
+            fi
+            ;;
+    esac
+
+    # Dry-run mode: show what would be executed without running
+    if [[ "$dry_run" == "true" ]]; then
+        print_info "Dry-run mode - would execute:"
+        echo "${full_command[*]}"
+        exit 0
+    fi
+
+    # Print what we're about to execute (for transparency)
+    if [[ "${YOLO_DEBUG:-false}" == "true" ]]; then
+        print_info "Executing: ${full_command[*]}"
+    fi
+
+    # Execute the command (not using exec so we can cleanup after)
+    "${full_command[@]}"
+    local exit_code=$?
+
+    # Handle cleanup if worktree was created
+    if [[ "$use_worktree" == "true" && -n "$YOLO_BRANCH_NAME" ]]; then
+        if [[ "$auto_clean" == "yes" ]]; then
+            # Automatic cleanup
+            cleanup_worktree "$YOLO_BRANCH_NAME" "$YOLO_WORKTREE_PATH" "$YOLO_REPO_ROOT"
+        elif [[ "$auto_clean" == "no" ]]; then
+            # No cleanup, just inform
+            print_info "Worktree preserved at: $YOLO_WORKTREE_PATH"
+        else
+            # Prompt user
+            prompt_cleanup "$YOLO_BRANCH_NAME" "$YOLO_WORKTREE_PATH" "$YOLO_REPO_ROOT"
+        fi
+    fi
+
+    exit $exit_code
+}
+
+# Run main function
+main "$@"
