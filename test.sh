@@ -153,6 +153,7 @@ test_command_flags() {
         "opencode:"  # no extra flags
         "qwen:--yolo"
         "kimi:--yolo"
+        "aider:--yes-always" 
         "unknown-tool:--yolo"
     )
 
@@ -218,6 +219,34 @@ EOF
         fi
     else
         print_info "Skipping qwen -i test (command not executed)"
+    fi
+
+    rm -f "$test_script"
+}
+
+# Test 5d: Aider gets prompt via AppleScript injection
+test_aider_prompt_injection() {
+    print_test_header "Test 5d: Aider Prompt Injection"
+    run_test
+
+    # Create a dummy aider that just echoes its arguments
+    local test_script="/tmp/aider"
+    cat > "$test_script" << 'EOF'
+#!/bin/bash
+echo "$@"
+EOF
+    chmod +x "$test_script"
+
+    # Run yolo aider with a positional prompt
+    local output
+    if output=$(PATH="/tmp:$PATH" run_with_timeout "$YOLO_TEST_TIMEOUT" "$YOLO_CMD" aider "implement feature" 2>&1); then
+        if echo "$output" | grep -F -q "--yes-always" && echo "$output" | grep -F -q "implement feature"; then
+            print_pass "yolo aider adds --yes-always and passes prompt"
+        else
+            print_fail "yolo aider should add --yes-always and pass prompt (got: $output)"
+        fi
+    else
+        print_info "Skipping aider prompt test (command not executed)"
     fi
 
     rm -f "$test_script"
@@ -439,6 +468,7 @@ main() {
     test_qwen_interactive_with_prompt
     test_kimi_command_with_prompt
     test_kimi_cli_detection
+    test_aider_prompt_injection
     test_worktree_creation
     test_worktree_no_git_error
     test_argument_preservation

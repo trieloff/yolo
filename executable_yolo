@@ -137,6 +137,8 @@ Examples:
   yolo copilot chat                # Run copilot chat with safety flags disabled
   yolo aider                       # Run aider with --yes-always
   yolo -w aider "implement feature" # Create worktree, run aider with prompt
+  yolo aider "add authentication middleware" # Run aider with auto-approval
+  yolo -e aider # Compose complex prompt in editor for aider
 
 Worktree Mode:
   When using -w/--worktree flag:
@@ -295,6 +297,10 @@ get_command_flags() {
         crush)
             # crush uses --yolo for auto-approval
             echo "--yolo"
+            ;;
+        aider)
+            # aider uses --yes-always for auto-approval
+            echo "--yes-always"
             ;;
         aider)
             # aider uses --yes-always for auto-approval
@@ -784,6 +790,8 @@ run_single_agent_ghostty_with_prompt() {
     local agent_cmd="$1"
     local prompt_text="$2"
     local is_copilot="${3:-false}"
+    local is_aider=false
+    [[ "$agent_cmd" == *"aider"* ]] && is_aider=true
 
     if ! is_ghostty; then
         print_error "not running in Ghostty terminal"
@@ -806,11 +814,16 @@ run_single_agent_ghostty_with_prompt() {
     print_debug "Waiting for agent to start..."
     sleep 4
 
-    # copilot shows a dialog that needs to be dismissed first
-    if [[ "$is_copilot" == "true" ]]; then
-        print_debug "Dismissing copilot dialog..."
+    # Handle agents that need initial dialog dismissal
+    if [[ "$is_copilot" == "true" || "$is_aider" == "true" ]]; then
+        print_debug "Dismissing copilot/aider dialog..."
         osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke return' >/dev/null 2>&1
         sleep 1
+        # For aider, send another return to get past the initial prompt
+        if [[ "$agent_name" == "aider" ]]; then
+            osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke return' >/dev/null 2>&1
+            sleep 1
+        fi
     fi
 
     # Send the prompt
