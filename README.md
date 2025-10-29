@@ -216,17 +216,24 @@ Use `--mop` to clean up orphaned worktrees from interrupted sessions or when you
 | `copilot` | `--allow-all-tools --allow-all-paths` |
 | `droid` | *(no flags - prompt allowed positionally)* |
 | `amp` | `--dangerously-allow-all` |
+| `aider` | `--yes-always` |
 | `cursor-agent` | `--force` |
 | `gemini` | `--yolo` (+ `-i` when prompt present) |
 | `opencode` | *(no flags)* |
 | `qwen` | `--yolo` (+ `-i` when prompt present) |
 | `kimi` | `--yolo` (+ `--command` when prompt present) |
 | `crush` | `--yolo` (+ Ghostty injection when prompt present) |
+| `aider` | `--yes-always` |
 | *(other)* | `--yolo` |
 
 ### Examples
 
 ```bash
+# Aider examples
+yolo aider "add authentication middleware" # Run aider with auto-approval
+yolo -w aider "implement feature" # Create worktree for aider session
+yolo -e aider # Compose complex prompt in editor for aider
+
 # Full YOLO mode - random agent selection
 yolo
 yolo -w  # Random agent in a new worktree
