@@ -249,6 +249,17 @@ EOF
         print_info "Skipping aider prompt test (command not executed)"
     fi
 
+    # Test with worktree flag
+    if output=$(PATH="/tmp:$PATH" run_with_timeout "$YOLO_TEST_TIMEOUT" "$YOLO_CMD" -w aider "implement feature" 2>&1); then
+        if echo "$output" | grep -F -q "--yes-always" && echo "$output" | grep -F -q "implement feature"; then
+            print_pass "yolo -w aider adds --yes-always and passes prompt"
+        else
+            print_fail "yolo -w aider should add --yes-always and pass prompt (got: $output)"
+        fi
+    else
+        print_info "Skipping aider worktree test (command not executed)"
+    fi
+
     rm -f "$test_script"
 }
 
