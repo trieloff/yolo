@@ -795,11 +795,6 @@ inject_prompt_background() {
                 osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke return' >/dev/null 2>&1
                 sleep 1
                 ;;
-            aider)
-                # Aider needs 1 return to dismiss dialog
-                osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke return' >/dev/null 2>&1
-                sleep 1
-                ;;
         esac
 
         # Send the prompt
@@ -817,8 +812,6 @@ inject_prompt_background() {
 run_single_agent_ghostty_with_prompt() {
     local agent_cmd="$1"
     local prompt_text="$2"
-    local is_aider=false
-    [[ "$agent_cmd" == *"aider"* ]] && is_aider=true
     local is_copilot="${3:-false}"
     [[ "$agent_cmd" == *"copilot"* ]] && is_copilot=true
 
@@ -846,11 +839,9 @@ run_single_agent_ghostty_with_prompt() {
     # Handle agents that need initial dialog dismissal
     if [[ "$is_copilot" == "true" ]]; then
         print_debug "Dismissing copilot dialog..."
+        # Copilot needs 2 returns to dismiss dialog
         osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke return' >/dev/null 2>&1
-        sleep 1
-    elif [[ "$is_aider" == "true" ]]; then
-        print_debug "Dismissing aider dialog..."
-        # Aider needs just one return
+        sleep 0.5
         osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke return' >/dev/null 2>&1
         sleep 1
     fi
