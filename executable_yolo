@@ -306,6 +306,10 @@ get_command_flags() {
             # aider uses --yes-always for auto-approval
             echo "--yes-always"
             ;;
+        aider)
+            # aider uses --yes-always for auto-approval
+            echo "--yes-always"
+            ;;
         *)
             echo "--yolo"
             ;;
@@ -817,7 +821,10 @@ run_single_agent_ghostty_with_prompt() {
     # Handle agents that need initial dialog dismissal
     if [[ "$is_copilot" == "true" || "$is_aider" == "true" ]]; then
         print_debug "Dismissing copilot/aider dialog..."
+        # Send two returns to get past initial prompts
         osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke return' >/dev/null 2>&1
+        sleep 0.5
+        osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke return' >/dev/null 2>&1 
         sleep 1
         # For aider, send another return to get past the initial prompt
         if [[ "$agent_name" == "aider" ]]; then
