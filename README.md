@@ -97,7 +97,7 @@ yolo -w
 yolo --dry-run
 ```
 
-When you run `yolo` without specifying a command, it scans your system for all installed supported coding agents (codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini, qwen, kimi, crush) and picks one at random. You only live yolo - even choosing your AI assistant is too much commitment!
+When you run `yolo` without specifying a command, it scans your system for all installed supported coding agents (codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini, qwen, kimi, crush, aider, goose) and picks one at random. You only live yolo - even choosing your AI assistant is too much commitment!
 
 ### Basic Usage
 
@@ -223,6 +223,7 @@ Use `--mop` to clean up orphaned worktrees from interrupted sessions or when you
 | `qwen` | `--yolo` (+ `-i` when prompt present) |
 | `kimi` | `--yolo` (+ `--command` when prompt present) |
 | `crush` | `--yolo` (+ Ghostty injection when prompt present) |
+| `goose` | *(no flags - prompts passed via stdin)* |
 | *(other)* | `--yolo` |
 
 ### Examples
@@ -243,6 +244,13 @@ yolo -w  # Random agent in a new worktree
 yolo claude
 yolo claude "fix all the bugs"
 yolo codex --help
+
+# Goose examples
+yolo goose "analyze the codebase and suggest improvements"
+yolo -w goose "implement feature X"  # Create worktree for goose session
+yolo -e goose  # Compose complex prompt in editor for goose
+yolo -w -c goose "quick experiment"  # Create worktree, auto-cleanup after
+yolo -w -nc goose "keep this work"  # Create worktree, preserve it after
 
 # Editor mode
 yolo -e claude                          # Compose prompt in editor
@@ -293,7 +301,7 @@ When you run `yolo` without specifying a command:
 yolo
 
 # YOLO does:
-# 1. Scans PATH for installed agents (codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini, qwen, kimi, crush)
+# 1. Scans PATH for installed agents (codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini, qwen, kimi, crush, aider, goose)
 # 2. Picks one at random using $RANDOM
 # 3. Adds appropriate flags for that agent
 # 4. Launches it
@@ -557,6 +565,8 @@ YOLO works with the following AI coding assistants:
 | **Gemini** | [github.com/google-gemini/gemini-cli](https://github.com/google-gemini/gemini-cli) | Google's open-source AI agent with Gemini 2.5 Pro |
 | **Kimi** | [kimi.moonshot.cn](https://kimi.moonshot.cn) | Moonshot AI's coding assistant with advanced reasoning |
 | **Crush** | [charm.sh/crush](https://charm.sh/crush) | Charm's interactive CLI tool for software engineering tasks |
+| **Aider** | [github.com/paul-gauthier/aider](https://github.com/paul-gauthier/aider) | AI pair programmer in your terminal |
+| **Goose** | [github.com/block/goose](https://github.com/block/goose) | Block's open-source AI coding agent (Square, Cash App, Afterpay) |
 
 ## Related Projects
 
