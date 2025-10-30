@@ -104,6 +104,7 @@ Supported Commands:
   opencode          No extra flags added
   crush             Uses --yolo (requires Ghostty for interactive prompts)
   aider             Uses --yes-always (requires Ghostty for interactive prompts)
+  goose             No extra flags added (prompts passed via stdin)
   <other>           Adds --yolo (generic fallback)
 
 Multi-agent Mode:
@@ -300,6 +301,11 @@ get_command_flags() {
             # aider uses --yes-always for auto-approval
             echo "--yes-always"
             ;;
+        goose)
+            # Goose has no bypass flags - runs autonomously by default
+            # Prompts are passed via stdin, not command-line flags
+            echo ""
+            ;;
         *)
             echo "--yolo"
             ;;
@@ -314,7 +320,7 @@ command_exists() {
 # Get all installed supported coding agents
 get_installed_agents() {
     local agents=()
-    local supported_commands=("codex" "claude" "copilot" "droid" "amp" "cursor-agent" "opencode" "qwen" "gemini" "kimi" "crush" "aider")
+    local supported_commands=("codex" "claude" "copilot" "droid" "amp" "cursor-agent" "opencode" "qwen" "gemini" "kimi" "crush" "aider" "goose")
 
     for cmd in "${supported_commands[@]}"; do
         if command_exists "$cmd"; then
@@ -465,8 +471,8 @@ send_ghostty_command() {
     # Escape for AppleScript: backslashes and quotes need escaping
     # AppleScript string literals use backslash as escape character
     local escaped_cmd="$cmd"
-    escaped_cmd="${escaped_cmd//\\/\\\\}"    # Escape backslashes first: \ → \\
-    escaped_cmd="${escaped_cmd//\"/\\\"}"    # Then escape quotes: " → \"
+    escaped_cmd="${escaped_cmd//\\/\\\\}"    # Escape backslashes first: \ ? \\
+    escaped_cmd="${escaped_cmd//\"/\\\"}"    # Then escape quotes: " ? \"
 
     # Type the command and press return
     print_debug "AppleScript escaped: $escaped_cmd"
@@ -922,6 +928,17 @@ run_multi_agents() {
                 fi
                 agent_prompts+=("")  # amp handles prompts via stdin, not delayed
                 ;;
+            goose)
+                # Goose: pass prompts via stdin using 'goose session'
+                if (( ${#common_args[@]} )); then
+                    local prompt_joined
+                    prompt_joined=$(printf '%s ' "${common_args[@]}"); prompt_joined=${prompt_joined%% }
+                    shell_cmd="echo $(printf %q "$prompt_joined") | goose session"
+                else
+                    cmd_arr+=("goose" "session")
+                fi
+                agent_prompts+=("")  # goose handles prompts via stdin, not delayed
+                ;;
             copilot)
                 # Copilot: doesn't support direct interactive prompts
                 # Launch agent, then send prompt via AppleScript after startup
@@ -1155,7 +1172,7 @@ pick_random_agent() {
 
     if [[ ${#agents[@]} -eq 0 ]]; then
         print_error "no supported coding agents found in PATH"
-        print_info "Supported agents: codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini, kimi, crush"
+        print_info "Supported agents: codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini, kimi, crush, aider, goose"
         return 1
     fi
 
@@ -1240,7 +1257,7 @@ mop_cleanup() {
             print_success "Deleted branch: $branch"
             ((branch_count++))
         fi
-    done < <(git branch | sed 's/^[* ] //' | grep -E '^(claude|codex|copilot|amp|opencode|gemini|qwen|droid|cursor-agent|kimi|crush)-[0-9]+$')
+    done < <(git branch | sed 's/^[* ] //' | grep -E '^(claude|codex|copilot|amp|opencode|gemini|qwen|droid|cursor-agent|kimi|crush|aider|goose)-[0-9]+$')
 
     if (( branch_count == 0 )); then
         print_info "No agent branches found"
@@ -1446,7 +1463,7 @@ main() {
         
         if [[ ${#all_agents[@]} -eq 0 ]]; then
             print_error "no supported coding agents found in PATH"
-            print_info "Supported agents: codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini, kimi, crush"
+            print_info "Supported agents: codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini, kimi, crush, aider, goose"
             exit 1
         fi
         
@@ -1492,7 +1509,7 @@ main() {
     fi
 
     # Determine mode based on command_name format:
-    # - Contains spaces: it's a prompt → full YOLO mode
+    # - Contains spaces: it's a prompt ? full YOLO mode
     # - Contains commas (no spaces): multi-agent mode (agent1,agent2,agent3)
     # - Single word: single-agent mode
     if [[ "$command_name" == *" "* ]]; then
@@ -1542,6 +1559,16 @@ main() {
                     local flag_array=($flags)
                     full_command+=("${flag_array[@]}")
                 fi
+            fi
+            ;;
+        goose)
+            # Goose: pass prompts via stdin using 'goose session'
+            if (( ${#command_args[@]} )); then
+                local prompt_joined
+                prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
+                full_command=(bash -lc "echo $(printf %q "$prompt_joined") | goose session")
+            else
+                full_command=("goose" "session")
             fi
             ;;
         copilot)
