@@ -103,6 +103,7 @@ Supported Commands:
   kimi              Uses --yolo (requires Ghostty for interactive prompts)
   opencode          No extra flags added
   crush             Uses --yolo (requires Ghostty for interactive prompts)
+  aider             Uses --yes-always (requires Ghostty for interactive prompts)
   <other>           Adds --yolo (generic fallback)
 
 Multi-agent Mode:
@@ -134,6 +135,8 @@ Examples:
   yolo -w -nc claude "keep this"   # Create worktree, preserve it after
   yolo -e codex,claude,gemini      # Compose prompt in editor, run 3 agents in parallel
   yolo copilot chat                # Run copilot chat with safety flags disabled
+  yolo aider "add auth"            # Run aider with auto-approval
+  yolo -w aider "implement feature" # Create worktree, run aider with prompt
 
 Worktree Mode:
   When using -w/--worktree flag:
@@ -293,6 +296,10 @@ get_command_flags() {
             # crush uses --yolo for auto-approval
             echo "--yolo"
             ;;
+        aider)
+            # aider uses --yes-always for auto-approval
+            echo "--yes-always"
+            ;;
         *)
             echo "--yolo"
             ;;
@@ -307,7 +314,7 @@ command_exists() {
 # Get all installed supported coding agents
 get_installed_agents() {
     local agents=()
-    local supported_commands=("codex" "claude" "copilot" "droid" "amp" "cursor-agent" "opencode" "qwen" "gemini" "kimi" "crush")
+    local supported_commands=("codex" "claude" "copilot" "droid" "amp" "cursor-agent" "opencode" "qwen" "gemini" "kimi" "crush" "aider")
 
     for cmd in "${supported_commands[@]}"; do
         if command_exists "$cmd"; then
@@ -769,14 +776,44 @@ run_multi_agents_ghostty() {
     return 0
 }
 
+# Inject a prompt into the current Ghostty terminal after a delay (background)
+# Args: prompt_text, agent_name (for determining dialog dismissal behavior), delay_seconds (default 4)
+inject_prompt_background() {
+    local prompt_text="$1"
+    local agent_name="$2"
+    local delay="${3:-4}"
+
+    (
+        sleep "$delay"
+
+        # Handle agent-specific dialog dismissal
+        case "$agent_name" in
+            copilot)
+                # Copilot needs 2 returns to dismiss dialog
+                osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke return' >/dev/null 2>&1
+                sleep 0.5
+                osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke return' >/dev/null 2>&1
+                sleep 1
+                ;;
+        esac
+
+        # Send the prompt
+        local escaped_prompt="$prompt_text"
+        escaped_prompt="${escaped_prompt//\\/\\\\}"
+        escaped_prompt="${escaped_prompt//\"/\\\"}"
+        osascript -e "tell application \"System Events\" to tell process \"Ghostty\" to keystroke \"$escaped_prompt\"" >/dev/null 2>&1
+        osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke return' >/dev/null 2>&1
+    ) &
+}
+
 # Launch a single agent in a Ghostty split with prompt sent via AppleScript
-# This is used for agents like copilot and kimi that don't support interactive launching with a prompt
-# (Their prompt flags cause immediate exit after execution)
+# This is used in MULTI-AGENT mode for agents that don't support interactive launching with a prompt
 # Args: agent_cmd (launch command without prompt), prompt_text, is_copilot (optional, "true" if copilot)
 run_single_agent_ghostty_with_prompt() {
     local agent_cmd="$1"
     local prompt_text="$2"
     local is_copilot="${3:-false}"
+    [[ "$agent_cmd" == *"copilot"* ]] && is_copilot=true
 
     if ! is_ghostty; then
         print_error "not running in Ghostty terminal"
@@ -799,9 +836,12 @@ run_single_agent_ghostty_with_prompt() {
     print_debug "Waiting for agent to start..."
     sleep 4
 
-    # copilot shows a dialog that needs to be dismissed first
+    # Handle agents that need initial dialog dismissal
     if [[ "$is_copilot" == "true" ]]; then
         print_debug "Dismissing copilot dialog..."
+        # Copilot needs 2 returns to dismiss dialog
+        osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke return' >/dev/null 2>&1
+        sleep 0.5
         osascript -e 'tell application "System Events" to tell process "Ghostty" to keystroke return' >/dev/null 2>&1
         sleep 1
     fi
@@ -1505,62 +1545,41 @@ main() {
             fi
             ;;
         copilot)
-            if (( ${#command_args[@]} )); then
+            # Trust the current directory explicitly
+            local trust_dir
+            trust_dir=$(pwd)
+
+            if [[ -n "$flags" ]]; then
+                # shellcheck disable=SC2206
+                local flag_array=($flags)
+                full_command+=("${flag_array[@]}")
+            fi
+            full_command+=(--add-dir "$trust_dir")
+
+            # If prompt provided and in Ghostty, inject it in background
+            if (( ${#command_args[@]} )) && is_ghostty; then
                 local prompt_joined
                 prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
-                local flags_str=""
-                if [[ -n "$flags" ]]; then flags_str="$flags"; fi
-                # Trust the current directory explicitly
-                local trust_dir
-                trust_dir=$(pwd)
-
-                # Use Ghostty split method if available for cleaner interactive experience
-                if is_ghostty; then
-                    local agent_cmd
-                    agent_cmd="copilot $flags_str --add-dir $(printf %q \"$trust_dir\")"
-                    run_single_agent_ghostty_with_prompt "$agent_cmd" "$prompt_joined" "true"
-                    exit $?
-                else
-                    # Fallback to one-shot + continue for non-Ghostty terminals
-                    full_command=(bash -lc "copilot $flags_str --add-dir $(printf %q \"$trust_dir\") -p $(printf %q \"$prompt_joined\"); copilot $flags_str --add-dir $(printf %q \"$trust_dir\") --continue")
-                fi
-            else
-                if [[ -n "$flags" ]]; then
-                    # shellcheck disable=SC2206
-                    local flag_array=($flags)
-                    full_command+=("${flag_array[@]}")
-                fi
-                # Trust current dir for interactive session
-                local trust_dir
-                trust_dir=$(pwd)
-                full_command+=(--add-dir "$trust_dir")
+                inject_prompt_background "$prompt_joined" "copilot" 4
             fi
             ;;
         kimi)
-            if (( ${#command_args[@]} )); then
-                local prompt_joined
-                prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
-                local flags_str=""
-                if [[ -n "$flags" ]]; then flags_str="$flags"; fi
+            if [[ -n "$flags" ]]; then
+                # shellcheck disable=SC2206
+                local flag_array=($flags)
+                full_command+=("${flag_array[@]}")
+            fi
 
-                # kimi --command exits after execution, not interactive
-                # Use Ghostty split method for proper interactive experience
+            # If prompt provided and in Ghostty, inject it in background
+            if (( ${#command_args[@]} )); then
                 if is_ghostty; then
-                    local agent_cmd
-                    agent_cmd="kimi $flags_str"
-                    run_single_agent_ghostty_with_prompt "$agent_cmd" "$prompt_joined"
-                    exit $?
+                    local prompt_joined
+                    prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
+                    inject_prompt_background "$prompt_joined" "kimi" 4
                 else
                     print_error "kimi with prompts requires Ghostty terminal for interactive mode"
                     print_info "Either run in Ghostty or launch kimi without a prompt"
                     exit 1
-                fi
-            else
-                # No prompt - just launch interactively
-                if [[ -n "$flags" ]]; then
-                    # shellcheck disable=SC2206
-                    local flag_array=($flags)
-                    full_command+=("${flag_array[@]}")
                 fi
             fi
             ;;
@@ -1590,30 +1609,42 @@ main() {
             fi
             ;;
         crush)
-            if (( ${#command_args[@]} )); then
-                local prompt_joined
-                prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
-                local flags_str=""
-                if [[ -n "$flags" ]]; then flags_str="$flags"; fi
+            if [[ -n "$flags" ]]; then
+                # shellcheck disable=SC2206
+                local flag_array=($flags)
+                full_command+=("${flag_array[@]}")
+            fi
 
-                # crush doesn't have -i flag, use delayed prompt sending like kimi
-                # Use Ghostty split method for proper interactive experience
+            # If prompt provided and in Ghostty, inject it in background
+            if (( ${#command_args[@]} )); then
                 if is_ghostty; then
-                    local agent_cmd
-                    agent_cmd="crush $flags_str"
-                    run_single_agent_ghostty_with_prompt "$agent_cmd" "$prompt_joined"
-                    exit $?
+                    local prompt_joined
+                    prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
+                    inject_prompt_background "$prompt_joined" "crush" 4
                 else
                     print_error "crush with prompts requires Ghostty terminal for interactive mode"
                     print_info "Either run in Ghostty or launch crush without a prompt"
                     exit 1
                 fi
-            else
-                # No prompt - just launch interactively
-                if [[ -n "$flags" ]]; then
-                    # shellcheck disable=SC2206
-                    local flag_array=($flags)
-                    full_command+=("${flag_array[@]}")
+            fi
+            ;;
+        aider)
+            if [[ -n "$flags" ]]; then
+                # shellcheck disable=SC2206
+                local flag_array=($flags)
+                full_command+=("${flag_array[@]}")
+            fi
+
+            # If prompt provided and in Ghostty, inject it in background
+            if (( ${#command_args[@]} )); then
+                if is_ghostty; then
+                    local prompt_joined
+                    prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
+                    inject_prompt_background "$prompt_joined" "aider" 4
+                else
+                    print_error "aider with prompts requires Ghostty terminal for interactive mode"
+                    print_info "Either run in Ghostty or launch aider without a prompt"
+                    exit 1
                 fi
             fi
             ;;

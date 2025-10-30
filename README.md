@@ -48,8 +48,7 @@ YOLO now automatically detects when it's running inside Kimi CLI and provides en
 
 When YOLO detects it's running inside Kimi CLI, you'll see:
 ```
-Detected Kimi CLI environment!
-YOLO is running inside Kimi CLI - enhanced integration enabled
+Detected Kimi CLI environment! YOLO is running inside Kimi CLI - enhanced integration enabled
 ```
 
 ## Installation
@@ -217,6 +216,7 @@ Use `--mop` to clean up orphaned worktrees from interrupted sessions or when you
 | `copilot` | `--allow-all-tools --allow-all-paths` |
 | `droid` | *(no flags - prompt allowed positionally)* |
 | `amp` | `--dangerously-allow-all` |
+| `aider` | `--yes-always` |
 | `cursor-agent` | `--force` |
 | `gemini` | `--yolo` (+ `-i` when prompt present) |
 | `opencode` | *(no flags)* |
@@ -228,6 +228,13 @@ Use `--mop` to clean up orphaned worktrees from interrupted sessions or when you
 ### Examples
 
 ```bash
+# Aider examples
+yolo aider "add authentication middleware" # Run aider with auto-approval
+yolo -w aider "implement feature" # Create worktree for aider session
+yolo -e aider # Compose complex prompt in editor for aider
+yolo -w -c aider "quick experiment" # Create worktree, auto-cleanup after
+yolo -w -nc aider "keep this work" # Create worktree, preserve it after
+
 # Full YOLO mode - random agent selection
 yolo
 yolo -w  # Random agent in a new worktree
