@@ -4,8 +4,6 @@
 
 [![22% Vibe_Coded](https://img.shields.io/badge/22%25-Vibe_Coded-ff69b4?style=for-the-badge&logo=claude&logoColor=white)](https://github.com/trieloff/vibe-coded-badge-action)
 
-[![Vibe_Coded](https://img.shields.io/badge/Vibe_Coded-ff69b4?style=for-the-badge&logo=claude&logoColor=white)](https://github.com/trieloff/vibe-coded-badge-action)
-
 > "You Only Launch Once... but in an isolated git worktree!"
 
 YOLO is a command-line wrapper for AI coding assistants that automatically adds the appropriate bypass/danger flags and optionally creates isolated git worktrees for agent sessions.
