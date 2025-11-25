@@ -105,6 +105,7 @@ Supported Commands:
   crush             Uses --yolo (requires Ghostty for interactive prompts)
   aider             Uses --yes-always (requires Ghostty for interactive prompts)
   goose             No extra flags added (prompts passed via stdin)
+  auggie            Uses --allow-indexing; adds --print when prompt present
   <other>           Adds --yolo (generic fallback)
 
 Multi-agent Mode:
@@ -306,6 +307,10 @@ get_command_flags() {
             # Prompts are passed via stdin, not command-line flags
             echo ""
             ;;
+        auggie)
+            # Auggie uses --allow-indexing to skip indexing confirmation
+            echo "--allow-indexing"
+            ;;
         *)
             echo "--yolo"
             ;;
@@ -320,7 +325,7 @@ command_exists() {
 # Get all installed supported coding agents
 get_installed_agents() {
     local agents=()
-    local supported_commands=("codex" "claude" "copilot" "droid" "amp" "cursor-agent" "opencode" "qwen" "gemini" "kimi" "crush" "aider" "goose")
+    local supported_commands=("codex" "claude" "copilot" "droid" "amp" "cursor-agent" "opencode" "qwen" "gemini" "kimi" "crush" "aider" "goose" "auggie")
 
     for cmd in "${supported_commands[@]}"; do
         if command_exists "$cmd"; then
@@ -1024,6 +1029,21 @@ run_multi_agents() {
                 fi
                 agent_prompts+=("")  # droid handles prompts positionally
                 ;;
+            auggie)
+                # auggie: use --print mode for automation with prompts
+                cmd_arr+=("$agent")
+                if [[ -n "$flags" ]]; then
+                    # shellcheck disable=SC2206
+                    local flag_array=($flags)
+                    cmd_arr+=("${flag_array[@]}")
+                fi
+                if (( ${#common_args[@]} )); then
+                    local prompt_joined
+                    prompt_joined=$(printf '%s ' "${common_args[@]}"); prompt_joined=${prompt_joined%% }
+                    cmd_arr+=("--print" "$prompt_joined")
+                fi
+                agent_prompts+=("")  # auggie handles prompts via --print flag
+                ;;
             *)
                 # Default: flags + positional prompt if provided
                 cmd_arr+=("$agent")
@@ -1172,7 +1192,7 @@ pick_random_agent() {
 
     if [[ ${#agents[@]} -eq 0 ]]; then
         print_error "no supported coding agents found in PATH"
-        print_info "Supported agents: codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini, kimi, crush, aider, goose"
+        print_info "Supported agents: codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini, kimi, crush, aider, goose, auggie"
         return 1
     fi
 
@@ -1257,7 +1277,7 @@ mop_cleanup() {
             print_success "Deleted branch: $branch"
             ((branch_count++))
         fi
-    done < <(git branch | sed 's/^[* ] //' | grep -E '^(claude|codex|copilot|amp|opencode|gemini|qwen|droid|cursor-agent|kimi|crush|aider|goose)-[0-9]+$')
+    done < <(git branch | sed 's/^[* ] //' | grep -E '^(claude|codex|copilot|amp|opencode|gemini|qwen|droid|cursor-agent|kimi|crush|aider|goose|auggie)-[0-9]+$')
 
     if (( branch_count == 0 )); then
         print_info "No agent branches found"
@@ -1463,7 +1483,7 @@ main() {
         
         if [[ ${#all_agents[@]} -eq 0 ]]; then
             print_error "no supported coding agents found in PATH"
-            print_info "Supported agents: codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini, kimi, crush, aider, goose"
+            print_info "Supported agents: codex, claude, copilot, droid, amp, cursor-agent, opencode, gemini, kimi, crush, aider, goose, auggie"
             exit 1
         fi
         
@@ -1673,6 +1693,20 @@ main() {
                     print_info "Either run in Ghostty or launch aider without a prompt"
                     exit 1
                 fi
+            fi
+            ;;
+        auggie)
+            if [[ -n "$flags" ]]; then
+                # shellcheck disable=SC2206
+                local flag_array=($flags)
+                full_command+=("${flag_array[@]}")
+            fi
+
+            # If prompt provided, use --print mode for automation
+            if (( ${#command_args[@]} )); then
+                local prompt_joined
+                prompt_joined=$(printf '%s ' "${command_args[@]}"); prompt_joined=${prompt_joined%% }
+                full_command+=("--print" "$prompt_joined")
             fi
             ;;
         *)
