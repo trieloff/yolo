@@ -1277,7 +1277,7 @@ mop_cleanup() {
             print_success "Deleted branch: $branch"
             ((branch_count++))
         fi
-    done < <(git branch | sed 's/^[* ] //' | grep -E '^(claude|codex|copilot|amp|opencode|gemini|qwen|droid|cursor-agent|kimi|crush|aider|goose)-[0-9]+$')
+    done < <(git branch | sed 's/^[* ] //' | grep -E '^(claude|codex|copilot|amp|opencode|gemini|qwen|droid|cursor-agent|kimi|crush|aider|goose|auggie)-[0-9]+$')
 
     if (( branch_count == 0 )); then
         print_info "No agent branches found"
