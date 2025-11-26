@@ -1037,6 +1037,8 @@ run_multi_agents() {
                     local flag_array=($flags)
                     cmd_arr+=("${flag_array[@]}")
                 fi
+                # Set workspace root to the current worktree path
+                cmd_arr+=("--workspace-root" "$YOLO_WORKTREE_PATH")
                 if (( ${#common_args[@]} )); then
                     local prompt_joined
                     prompt_joined=$(printf '%s ' "${common_args[@]}"); prompt_joined=${prompt_joined%% }
@@ -1700,6 +1702,11 @@ main() {
                 # shellcheck disable=SC2206
                 local flag_array=($flags)
                 full_command+=("${flag_array[@]}")
+            fi
+
+            # If running in worktree mode, set workspace root to worktree path
+            if [[ "$use_worktree" == "true" && -n "$YOLO_WORKTREE_PATH" ]]; then
+                full_command+=("--workspace-root" "$YOLO_WORKTREE_PATH")
             fi
 
             # If prompt provided, use --print mode for automation
