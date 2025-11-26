@@ -1073,6 +1073,12 @@ run_multi_agents() {
             cmd_arr+=(--add-dir "$YOLO_WORKTREE_PATH")
         fi
 
+        # If auggie, add --workspace-root to use the worktree directory
+        if [[ "$agent" == "auggie" ]]; then
+            # Set workspace root to the current worktree path
+            cmd_arr+=("--workspace-root" "$YOLO_WORKTREE_PATH")
+        fi
+
         # Return to the original directory to continue creating more worktrees
         cd "$start_pwd"
 
@@ -1700,6 +1706,11 @@ main() {
                 # shellcheck disable=SC2206
                 local flag_array=($flags)
                 full_command+=("${flag_array[@]}")
+            fi
+
+            # If running in worktree mode, set workspace root to worktree path
+            if [[ "$use_worktree" == "true" && -n "$YOLO_WORKTREE_PATH" ]]; then
+                full_command+=("--workspace-root" "$YOLO_WORKTREE_PATH")
             fi
 
             # If prompt provided, use --print mode for automation
